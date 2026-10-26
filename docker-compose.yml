@@ -12,7 +12,7 @@ services:
     shm_size: "2gb"
     user: "${PUID:-1000}:${PGID:-1000}"
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-0.0.0.0}:${HOST_PORT:-8080}:8080"
     environment:
       - DATA_DIR=/data
       - GOOGLE_GENAI_USE_VERTEXAI=FALSE
@@ -21,7 +21,7 @@ services:
       # Persistent host directory OUTSIDE the app/Git directory so git pull, git clean,
       # re-cloning, or `docker compose pull && docker compose up -d` never overwrite
       # your API keys, OAuth tokens, service account keys, SQLite sessions, or Chrome profile.
-      - ${HOST_DATA_DIR:-~/.config/local-adk-agent/data}:/data
+      - "${HOST_DATA_DIR:-${HOME}/.config/local-adk-agent/data}:/data"
     security_opt:
       - no-new-privileges:true
     cap_drop:
