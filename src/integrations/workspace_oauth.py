@@ -342,6 +342,61 @@ class WorkspaceOAuthManager:
             _write_secure_file(alias, serialized)
             return {"saved": True, "path": str(primary)}
 
+    def _resolve_preferred_redirect_uri(
+        self, requested_redirect_uri: Optional[str] = None
+    ) -> str:
+        """Resolves a Google-OAuth-compliant redirect URI.
+
+        Google Cloud Console rejects raw private/LAN IP addresses (e.g.
+        http://192.168.x.x:8080/...) with redirect_uri_mismatch / invalid
+        redirect. If the user is browsing the Web UI via their server IP, we
+        automatically use the redirect_uri declared in client_secret.json or
+        http://localhost:8080/api/auth/workspace/callback.
+        """
+        default_localhost = "http://localhost:8080/api/auth/workspace/callback"
+        secret_path = self.client_secret_path
+        configured_uris: list[str] = []
+        if secret_path.exists():
+            try:
+                raw = json.loads(secret_path.read_text(encoding="utf-8"))
+                client_cfg = raw.get("web") or raw.get("installed") or {}
+                uris = client_cfg.get("redirect_uris") or []
+                if isinstance(uris, list):
+                    configured_uris = [str(u).strip() for u in uris if str(u).strip()]
+            except Exception:
+                pass
+
+        if requested_redirect_uri:
+            if requested_redirect_uri in configured_uris:
+                return requested_redirect_uri
+            # Check if requested_redirect_uri uses a raw IP address over HTTP
+            try:
+                from urllib.parse import urlparse
+                import ipaddress
+
+                parsed_url = urlparse(requested_redirect_uri)
+                host = (parsed_url.hostname or "").strip()
+                is_ip = False
+                if host:
+                    try:
+                        ip_obj = ipaddress.ip_address(host)
+                        is_ip = not ip_obj.is_loopback
+                    except ValueError:
+                        is_ip = False
+                if is_ip and parsed_url.scheme == "http":
+                    for u in configured_uris:
+                        if "/api/auth/workspace/callback" in u:
+                            return u
+                    return default_localhost
+            except Exception:
+                pass
+
+        for u in configured_uris:
+            if "/api/auth/workspace/callback" in u:
+                return u
+
+        return requested_redirect_uri or default_localhost
+
     def generate_auth_url(
         self,
         redirect_uri: str = "http://localhost:8080/api/auth/workspace/callback",
@@ -355,6 +410,7 @@ class WorkspaceOAuthManager:
                     f"OAuth client_secret.json not found at {secret_path}. Upload or paste it in Settings first."
                 )
 
+            effective_redirect_uri = self._resolve_preferred_redirect_uri(redirect_uri)
             effective_scopes = list(scopes) if scopes else list(DEFAULT_WORKSPACE_SCOPES)
             cfg_mgr = _get_cfg_manager()
             if not scopes and cfg_mgr is not None:
@@ -366,23 +422,26 @@ class WorkspaceOAuthManager:
             flow = Flow.from_client_secrets_file(
                 str(secret_path),
                 scopes=effective_scopes,
-                redirect_uri=redirect_uri,
+                redirect_uri=effective_redirect_uri,
             )
             authorization_url, state = flow.authorization_url(
                 access_type="offline",
                 include_granted_scopes="true",
                 prompt="consent",
             )
-            self._oauth_states[state] = {
-                "redirect_uri": redirect_uri,
+            state_record = {
+                "redirect_uri": effective_redirect_uri,
                 "scopes": effective_scopes,
                 "code_verifier": getattr(flow, "code_verifier", None),
             }
+            self._oauth_states[state] = state_record
+            self._oauth_states["__latest__"] = state_record
             return DualSyncAsyncDict(
                 {
                     "authorization_url": authorization_url,
                     "auth_url": authorization_url,
                     "state": state,
+                    "redirect_uri": effective_redirect_uri,
                 }
             )
 
@@ -400,9 +459,11 @@ class WorkspaceOAuthManager:
                 raise FileNotFoundError("OAuth client_secret.json not found.")
 
             state_meta = self._oauth_states.pop(state, None) if state else None
+            if state_meta is None:
+                state_meta = self._oauth_states.get("__latest__")
             effective_redirect_uri = (
-                redirect_uri
-                or (state_meta or {}).get("redirect_uri")
+                (state_meta or {}).get("redirect_uri")
+                or self._resolve_preferred_redirect_uri(redirect_uri)
                 or "http://localhost:8080/api/auth/workspace/callback"
             )
             effective_scopes = (

@@ -722,6 +722,15 @@
                   <span>Authorize Workspace account</span>
                 </button>
               </div>
+
+              <label class="meta" for="workspace-callback-input">Remote server callback URL (if browsing via server IP and Google redirects to <code>localhost:8080</code>)</label>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <input type="text" id="workspace-callback-input" class="m3-input-field" style="flex: 1; min-width: 200px;" placeholder="Paste http://localhost:8080/api/auth/workspace/callback?code=... here" />
+                <button type="button" id="complete-workspace-callback-btn" class="btn-card-action">
+                  <span>Complete auth</span>
+                </button>
+              </div>
+              <span id="workspace-auth-feedback" class="meta" style="margin: 0;"></span>
             </article>
 
             <!-- Card 3: Google Chat Integration (Pub/Sub Pull + Owner Allowlist) -->

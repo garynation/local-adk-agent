@@ -1212,15 +1212,62 @@
   var authWorkspaceBtn = document.getElementById('authorize-workspace-btn');
   if (authWorkspaceBtn) {
     authWorkspaceBtn.addEventListener('click', function () {
+      var fb = document.getElementById('workspace-auth-feedback');
       fetch('/api/auth/workspace/start')
         .then(function (r) {
-          return r.json();
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || 'Save client_secret.json first');
+            return d;
+          });
         })
         .then(function (data) {
           var url = data.auth_url || data.authorization_url;
-          if (url) window.location.href = url;
+          if (url) window.open(url, '_blank', 'noopener');
+          if (fb) {
+            fb.textContent =
+              'Opened Google consent tab. If redirected to localhost:8080 from a remote browser, paste that URL above and click Complete auth.';
+          }
         })
-        .catch(function () {});
+        .catch(function (err) {
+          if (fb) fb.textContent = 'Error: ' + err.message;
+        });
+    });
+  }
+
+  var completeWorkspaceCallbackBtn = document.getElementById(
+    'complete-workspace-callback-btn'
+  );
+  if (completeWorkspaceCallbackBtn) {
+    completeWorkspaceCallbackBtn.addEventListener('click', function () {
+      var cbInput = document.getElementById('workspace-callback-input');
+      var fb = document.getElementById('workspace-auth-feedback');
+      var val = cbInput ? cbInput.value.trim() : '';
+      if (!val) return;
+      if (fb) fb.textContent = 'Exchanging authorization code...';
+      fetch('/api/auth/workspace/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callback_url_or_code: val })
+      })
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || 'Exchange failed');
+            return d;
+          });
+        })
+        .then(function (res) {
+          if (cbInput) cbInput.value = '';
+          if (fb) {
+            fb.textContent =
+              'Authorized Workspace account' +
+              (res.connected_email ? ' (' + res.connected_email + ')' : '') +
+              '!';
+          }
+          syncConfigStatus();
+        })
+        .catch(function (err) {
+          if (fb) fb.textContent = 'Error: ' + err.message;
+        });
     });
   }
 

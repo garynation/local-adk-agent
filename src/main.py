@@ -985,15 +985,17 @@ async def start_workspace_oauth(request: Request) -> dict[str, Any]:
     )
 
 
-@app.get("/api/auth/workspace/callback", name="workspace_oauth_callback")
-async def workspace_oauth_callback(
-    request: Request,
-    code: str = Query(...),
-    state: str | None = Query(default=None),
-) -> RedirectResponse:
-    redirect_uri = str(request.url_for("workspace_oauth_callback"))
-    oauth_mgr = _resolve_workspace_oauth_manager(request)
+class WorkspaceManualExchangePayload(BaseModel):
+    callback_url_or_code: str = Field(..., min_length=4)
 
+
+async def _finalize_workspace_oauth_exchange(
+    request: Request,
+    code: str,
+    state: str | None,
+    redirect_uri: str,
+) -> dict[str, Any]:
+    oauth_mgr = _resolve_workspace_oauth_manager(request)
     try:
         sig = inspect.signature(oauth_mgr.exchange_code)
         kwargs: dict[str, Any] = {"code": code}
@@ -1034,7 +1036,43 @@ async def workspace_oauth_callback(
     except Exception:
         pass
 
+    return {
+        "connected": True,
+        "connected_email": connected_email,
+    }
+
+
+@app.get("/api/auth/workspace/callback", name="workspace_oauth_callback")
+async def workspace_oauth_callback(
+    request: Request,
+    code: str = Query(...),
+    state: str | None = Query(default=None),
+) -> RedirectResponse:
+    redirect_uri = str(request.url_for("workspace_oauth_callback"))
+    await _finalize_workspace_oauth_exchange(request, code, state, redirect_uri)
     return RedirectResponse(url="/?view=settings&oauth=success")
+
+
+@app.post("/api/auth/workspace/exchange")
+async def workspace_oauth_manual_exchange(
+    payload: WorkspaceManualExchangePayload,
+    request: Request,
+) -> dict[str, Any]:
+    raw_value = payload.callback_url_or_code.strip()
+    code = raw_value
+    state: str | None = None
+    if "code=" in raw_value:
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(raw_value if "://" in raw_value else f"http://localhost/?{raw_value.lstrip('?')}")
+        qs = parse_qs(parsed.query)
+        if qs.get("code"):
+            code = qs["code"][0]
+        if qs.get("state"):
+            state = qs["state"][0]
+
+    redirect_uri = str(request.url_for("workspace_oauth_callback"))
+    return await _finalize_workspace_oauth_exchange(request, code, state, redirect_uri)
 
 
 # ---------------------------------------------------------------------------
