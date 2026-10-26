@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADK Personal Agent &amp; Research Workbench</title>
+
+  <!-- Google Sans Flex + Inter + Material Symbols Outlined -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+
+  <!-- Canonical Bill Skill v2.2 Tokenized Stylesheets -->
+  <link rel="stylesheet" href="/static/css/gm3-color-tokens.css">
+  <link rel="stylesheet" href="/static/css/buttons-chips-badges.css">
+  <link rel="stylesheet" href="/static/css/chat-stream-cards.css">
+  <link rel="stylesheet" href="/static/css/controls-sliders-dials.css">
+
+  <style>
+    /* =========================================================================
+       App Shell & Surface Hierarchy (100% --md-sys-color-* Tokens · Zero Hex)
+       Page Canvas = Light Grey (--md-sys-color-surface-container-low)
+       Cards = Pure White (--md-sys-color-surface-container-lowest), border: none
+       ========================================================================= */
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--md-sys-color-surface-container-low);
+      color: var(--md-sys-color-on-surface);
+      font-family: var(--md-ref-typeface-plain);
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    /* Sticky Top Application Bar (<= 64px height, User Avatar strictly rightmost) */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      max-height: 64px;
+      padding: 0 16px;
+      gap: 12px;
+      background: var(--md-sys-color-surface-container-low);
+      border: none;
+      box-shadow: none;
+    }
+
+    .top-bar-left,
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 150ms ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .icon-btn.send-btn {
+      background: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+    }
+
+    .icon-btn.send-btn:hover {
+      filter: brightness(0.95);
+    }
+
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--md-ref-typeface-brand);
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .avatar-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    /* Workspace Body: Collapsible Left Rail (240px -> 80px) + Main Viewport */
+    .shell-body {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .side-nav {
+      width: 240px;
+      flex-shrink: 0;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: var(--md-sys-color-surface-container-low);
+      transition: width 200ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .side-nav.rail-collapsed {
+      width: 80px;
+      align-items: center;
+    }
+
+    .side-nav.rail-collapsed .nav-label {
+      display: none;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 9999px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface-variant);
+      font-family: var(--md-ref-typeface-plain);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+
+    .nav-item:hover {
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .nav-item.active {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+      font-weight: 600;
+    }
+
+    .main-viewport {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 20px 32px;
+      background: var(--md-sys-color-surface-container-low);
+    }
+
+    /* Elevated Pure White Cards (Zero Container Borders) */
+    .card {
+      background: var(--md-sys-color-surface-container-lowest);
+      border-radius: 16px;
+      padding: 20px 24px;
+      border: none;
+      box-shadow: none;
+      min-width: 0;
+    }
+
+    .card-title {
+      font-family: var(--md-ref-typeface-brand);
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--md-sys-color-on-surface);
+    }
+
+    .row-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .row-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .meta {
+      font-size: 12.5px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.45;
+    }
+
+    /* Mode 2 Centered Max-Width for Settings & Onboarding Console */
+    .settings-canvas {
+      max-width: 1280px;
+      margin-inline: auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    /* Single-Border Session Items (NO_SESSION_RAIL_BADGES) */
+    .session-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 540px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .session-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: none;
+      background: transparent;
+      color: var(--md-sys-color-on-surface);
+      text-align: left;
+      cursor: pointer;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .session-item:hover {
+      background: var(--md-sys-color-surface-container-high);
+    }
+
+    .session-item.active {
+      background: var(--md-sys-color-secondary-container);
+      color: var(--md-sys-color-on-secondary-container);
+    }
+
+    .session-item.active .session-item-meta {
+      color: var(--md-sys-color-on-secondary-container);
+    }
+
+    .session-item-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-item-meta {
+      font-size: 12px;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    .browser-shot-preview {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .allowlist-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    /* Mobile & Tablet Slide-Over Drawer (<= 1024px) */
+    .nav-scrim {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 190;
+      background: color-mix(in srgb, var(--md-sys-color-scrim) 45%, transparent);
+    }
+
+    @media (max-width: 1024px) {
+      .side-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 264px !important;
+        z-index: 200;
+        transform: translateX(-105%);
+        pointer-events: none;
+        box-shadow: 0 8px 24px color-mix(in srgb, var(--md-sys-color-shadow) 24%, transparent);
+        transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+      }
+      .side-nav.drawer-open {
+        transform: translateX(0);
+        pointer-events: auto;
+      }
+      .nav-scrim.drawer-open {
+        display: block;
+      }
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .icon-btn, .nav-item, button {
+        min-width: 44px;
+        min-height: 44px;
+      }
+      .main-viewport {
+        padding: 10px 12px 24px;
+      }
+      .card {
+        padding: 16px;
+      }
+      #gchat-ambient-status {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Bar: Left Hamburger + Brand | Right Status + Auto Theme Toggle + Rightmost User Avatar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button type="button" id="menu-toggle-btn" class="icon-btn" aria-label="Toggle navigation" aria-expanded="false" aria-controls="side-nav">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="app-brand">
+          <span class="material-symbols-outlined">hub</span>
+          <span>ADK Personal Workbench</span>
+        </div>
+      </div>
+
+      <div class="top-bar-right">
+        <span id="gchat-ambient-status" class="status-dot-inline">
+          <span class="status-dot green"></span>
+          <span>Pub/Sub ready · SQLite synced</span>
+        </span>
+
+        <button type="button" id="theme-toggle-btn" class="icon-btn" aria-label="Theme: Auto (system)" title="Theme: Auto (system)">
+          <span class="material-symbols-outlined" id="theme-toggle-icon">brightness_auto</span>
+        </button>
+
+        <img
+          class="avatar-img"
+          alt="Signed-in workspace owner"
+          src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%230E57D0'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23D3E3FD'/%3E%3Cpath d='M12 56c4-11 14-16 20-16s16 5 20 16' fill='%23D3E3FD'/%3E%3C/svg%3E"
+        />
+      </div>
+    </header>
+
+    <div id="nav-scrim" class="nav-scrim"></div>
+
+    <div class="shell-body">
+      <!-- Left App Navigation Rail (Zero Count Badges) -->
+      <nav id="side-nav" class="side-nav" aria-label="Primary navigation">
+        <button type="button" class="nav-item active" data-view="workbench" data-view-target="workbench">
+          <span class="material-symbols-outlined">chat</span>
+          <span class="nav-label">Chat &amp; Research</span>
+        </button>
+        <button type="button" class="nav-item" data-view="settings" data-view-target="settings">
+          <span class="material-symbols-outlined">tune</span>
+          <span class="nav-label">Configuration &amp; Keys</span>
+        </button>
+      </nav>
+
+      <!-- Main Viewport -->
+      <main class="main-viewport">
+        <!-- =================================================================
+             VIEW 1: CHAT & DEEP RESEARCH WORKBENCH (Mode 3: 3 -> 2 -> 1 Grid)
+             ================================================================= -->
+        <section id="view-workbench" class="chat-workbench-grid view-panel active">
+          <!-- Column 1: Shared SQLite Session Rail (0 Badges) -->
+          <aside class="card">
+            <div class="row-between" style="margin-bottom: 12px;">
+              <h2 class="card-title">Conversations <span id="session-count-label" class="header-count">· 3</span></h2>
+              <button type="button" id="new-session-btn" class="btn-tonal">
+                <span class="material-symbols-outlined">add</span>
+                <span>New</span>
+              </button>
+            </div>
+            <div id="session-list" class="session-list" data-scroll-fade>
+              <button type="button" class="session-item active" data-session-id="sess_mobile_gchat_01">
+                <span class="session-item-title">Tokyo flight itinerary &amp; hotel research</span>
+                <span class="session-item-meta">Google Chat · 2m ago</span>
+              </button>
+              <button type="button" class="session-item" data-session-id="sess_webui_02">
+                <span class="session-item-title">Home server UPS battery comparison</span>
+                <span class="session-item-meta">Deep Research · 1h ago</span>
+              </button>
+              <button type="button" class="session-item" data-session-id="sess_mobile_gchat_03">
+                <span class="session-item-title">Summarize unread invoices in Gmail</span>
+                <span class="session-item-meta">Google Chat · Yesterday</span>
+              </button>
+            </div>
+          </aside>
+
+          <!-- Column 2: Primary Chronological Agent Stream & Composer -->
+          <section class="card" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="row-between" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h1 id="active-session-title" style="font-size: 18px; margin: 0;">Tokyo flight itinerary &amp; hotel research <span class="header-count">· Synced</span></h1>
+                <p id="active-session-subtitle" class="meta" style="margin: 2px 0 0;">Shared SQLite session · Started on mobile Google Chat</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <select id="model-select" class="m3-select" aria-label="Select Gemini model">
+                  <option value="gemini-2.5-pro" selected>gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                </select>
+                <div id="deep-research-toggle" class="m3-pill-tabs" role="tablist" aria-label="Execution mode">
+                  <button type="button" class="m3-pill-tab active" role="tab" aria-selected="true" data-mode="standard">Standard</button>
+                  <button type="button" class="m3-pill-tab" role="tab" aria-selected="false" data-mode="deep_research">Deep Research</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Single-Column Chronological Stream -->
+            <div id="chat-stream" class="chat-stream" data-scroll-fade>
+              <article class="chat-msg user">
+                <div class="chat-turn-header">
+                  <strong class="chat-msg-author">You (via mobile Google Chat)</strong>
+                  <span class="chat-msg-time">4m ago</span>
+                </div>
+                <p style="margin: 0;">Check my Gmail for the ANA flight confirmation next month, verify current JR Pass pricing via Google Search and Headless Chrome, and draft a summary note to my travel partner.</p>
+              </article>
+
+              <article class="chat-msg assistant">
+                <div class="chat-turn-header">
+                  <div class="chat-turn-identity">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    <strong class="chat-msg-author">ADK Personal Agent</strong>
+                    <span class="chat-turn-badge">Verified · Grounded</span>
+                  </div>
+                  <span class="chat-msg-time">gemini-2.5-pro · 2m ago</span>
+                </div>
+
+                <!-- Expandable Tool Call 1: Personal Gmail Search -->
+                <div class="step-trace-box">
+                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
+                    <span class="row-inline">
+                      <span class="material-symbols-outlined">mail</span>
+                      <span>Workspace tool: <strong>gmail_search_messages</strong></span>
+                    </span>
+                    <span class="row-inline">
+                      <span class="status-dot-inline"><span class="status-dot green"></span>200 OK · 164 ms</span>
+                      <span class="material-symbols-outlined">expand_more</span>
+                    </span>
+                  </button>
+                  <pre class="step-trace-body" hidden>{
+  "query": "from:ana.co.jp subject:(Confirmation OR e-Ticket) newer_than:60d",
+  "matched_threads": 1,
+  "flight": "NH 212 (LHR -> HND) · Departs Nov 14, 19:00"
+}</pre>
+                </div>
+
+                <!-- Expandable Tool Call 2: Google Search Grounding Sub-Agent -->
+                <div class="step-trace-box">
+                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
+                    <span class="row-inline">
+                      <span class="material-symbols-outlined">travel_explore</span>
+                      <span>Search grounding: <strong>google_search_agent</strong></span>
+                    </span>
+                    <span class="row-inline">
+                      <span class="status-dot-inline"><span class="status-dot green"></span>Grounded · 390 ms</span>
+                      <span class="material-symbols-outlined">expand_more</span>
+                    </span>
+                  </button>
+                  <pre class="step-trace-body" hidden>{
+  "web_search_queries": ["JR Pass 7 day ordinary price 2026 official", "Tokaido Shinkansen Nozomi supplement"],
+  "grounding_chunks": ["https://japanrailpass.net/en/about_jrp/price/"]
+}</pre>
+                </div>
+
+                <!-- Expandable Tool Call 3: Headless Chrome Live Capture -->
+                <div class="step-trace-box">
+                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
+                    <span class="row-inline">
+                      <span class="material-symbols-outlined">web</span>
+                      <span>Headless Chrome: <strong>browse_webpage</strong></span>
+                    </span>
+                    <span class="row-inline">
+                      <span class="status-dot-inline"><span class="status-dot green"></span>Screenshot ready · 920 ms</span>
+                      <span class="material-symbols-outlined">expand_more</span>
+                    </span>
+                  </button>
+                  <div class="step-trace-body" hidden>
+                    <div>Navigated to <code>https://japanrailpass.net/en/</code> (Chromium headless profile <code>/data/chrome-profile</code>)</div>
+                  </div>
+                </div>
+
+                <!-- Grounded Prose with Interactive Source Pills -->
+                <p style="margin: 0;">
+                  I found your ANA e-ticket confirmation in Gmail <button type="button" class="chat-cite-pill" data-cite-id="cite-gmail-1">[1] Gmail: ANA Booking #NH212</button> arriving at Haneda on <strong>Nov 15 at 15:45 JST</strong>. Using Google Search grounding and Headless Chrome <button type="button" class="chat-cite-pill" data-cite-id="cite-web-1">[2] JR Pass Official Fare Table</button>, the 7-day Ordinary JR Pass is <strong>¥50,000</strong>, which exceeds individual round-trip Tokyo–Kyoto Shinkansen tickets (¥28,340).
+                </p>
+
+                <!-- Single-Column Result Summary Inset (Staged Gmail Draft) -->
+                <div class="card-nested">
+                  <div class="row-between">
+                    <h4>Staged Gmail draft: Tokyo Arrival &amp; Shinkansen Plan</h4>
+                    <span class="chat-turn-badge model-badge">Draft staged</span>
+                  </div>
+                  <p class="meta" style="margin: 0;">Saved to Gmail Drafts (Safety Gate: Draft-Only mode active). Includes NH 212 arrival details and SmartEX ticket recommendation.</p>
+                </div>
+
+                <!-- Per-Turn Inline Chat Actions -->
+                <div class="chat-inline-actions">
+                  <div class="chat-action-group">
+                    <button type="button" class="chat-action-btn primary-tonal" data-chat-action="send-draft">
+                      <span class="material-symbols-outlined">send</span>
+                      <span>Approve &amp; send draft</span>
+                    </button>
+                    <button type="button" class="chat-action-btn" data-chat-action="cite" data-cite-id="cite-web-1">
+                      <span class="material-symbols-outlined">fact_check</span>
+                      <span>Inspect sources</span>
+                    </button>
+                  </div>
+                  <div class="chat-action-group">
+                    <button type="button" class="chat-action-btn" data-chat-action="feedback-up" aria-label="Helpful response">
+                      <span class="material-symbols-outlined">thumb_up</span>
+                    </button>
+                    <button type="button" class="chat-action-btn" data-chat-action="copy" aria-label="Copy response">
+                      <span class="material-symbols-outlined">content_copy</span>
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <!-- Follow-Up Suggestion Chips -->
+            <div class="prompt-suggestion-row">
+              <button type="button" class="prompt-suggestion-chip">Add Flight NH 212 to my Google Calendar</button>
+              <button type="button" class="prompt-suggestion-chip">Run Deep Research on boutique hotels in Kyoto</button>
+              <button type="button" class="prompt-suggestion-chip">Create a Google Doc itinerary from this thread</button>
+            </div>
+
+            <!-- Google Chat Borderless Tonal Pill Composer -->
+            <form id="chat-composer-form" class="chat-composer-container">
+              <button type="button" id="attach-context-btn" class="icon-btn" aria-label="Attach context">
+                <span class="material-symbols-outlined">add_circle</span>
+              </button>
+              <div class="chat-composer-pill">
+                <textarea id="chat-input" class="chat-composer-textarea" rows="1" placeholder="Ask your ADK agent, search Gmail/Drive, or launch Deep Research..."></textarea>
+              </div>
+              <button type="submit" id="chat-send-btn" class="icon-btn send-btn" aria-label="Send message">
+                <span class="material-symbols-outlined">arrow_upward</span>
+              </button>
+            </form>
+          </section>
+
+          <!-- Column 3: Grounded Sources & Headless Chrome Inspector Rail -->
+          <aside class="card context-pane" data-scroll-fade style="display: flex; flex-direction: column; gap: 12px;">
+            <h2 class="card-title">Grounded sources <span id="sources-count-label" class="header-count">· 2</span></h2>
+
+            <div id="grounding-sources-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <div id="cite-gmail-1" class="card-nested" style="background: var(--md-sys-color-surface-container);">
+                <div class="row-between">
+                  <strong>ANA e-Ticket #NH212</strong>
+                  <span class="chat-turn-badge">Gmail Thread</span>
+                </div>
+                <p class="meta" style="margin: 0;">From: reservation@ana.co.jp · LHR to HND · Nov 14</p>
+              </div>
+
+              <div id="cite-web-1" class="card-nested" style="background: var(--md-sys-color-surface-container);">
+                <div class="row-between">
+                  <strong>JR Pass Fare Table 2026</strong>
+                  <span class="chat-turn-badge">Web Grounded</span>
+                </div>
+                <p class="meta" style="margin: 0;">japanrailpass.net · Verified via Google Search &amp; Playwright</p>
+              </div>
+            </div>
+
+            <div id="browser-inspector-card" class="card-nested" style="background: var(--md-sys-color-surface-container); margin-top: 4px;">
+              <div class="row-between">
+                <strong>Headless Chrome viewport</strong>
+                <span class="status-dot-inline"><span class="status-dot green"></span>Ready</span>
+              </div>
+              <p class="meta" style="margin: 0;">Profile: <code>/data/chrome-profile</code></p>
+              <img id="latest-browser-shot" class="browser-shot-preview" alt="Latest Headless Chrome capture" hidden />
+            </div>
+          </aside>
+        </section>
+
+        <!-- =================================================================
+             VIEW 2: LIVE CONFIGURATION & ONBOARDING CONSOLE (Mode 2: 1280px)
+             ================================================================= -->
+        <section id="view-settings" class="settings-canvas view-panel" hidden>
+          <div class="card">
+            <div class="row-between" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h1 style="font-size: 20px; margin: 0;">Configuration &amp; integrations console</h1>
+                <p class="meta" style="margin: 4px 0 0;">Secrets and OAuth tokens are stored on your host volume in <code>/data</code> with <code>0600</code> permissions and hot-reloaded without container restarts.</p>
+              </div>
+              <div id="settings-filter-tabs" class="m3-pill-tabs" role="tablist" aria-label="Filter configuration sections">
+                <button type="button" class="m3-pill-tab active" role="tab" aria-selected="true" data-filter="all">All integrations</button>
+                <button type="button" class="m3-pill-tab" role="tab" aria-selected="false" data-filter="gemini">AI Studio</button>
+                <button type="button" class="m3-pill-tab" role="tab" aria-selected="false" data-filter="workspace">Workspace OAuth</button>
+                <button type="button" class="m3-pill-tab" role="tab" aria-selected="false" data-filter="gchat">Google Chat</button>
+                <button type="button" class="m3-pill-tab" role="tab" aria-selected="false" data-filter="browser">Browser &amp; Security</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <!-- Card 1: AI Studio API Key (Owns the single .btn-primary on view) -->
+            <article class="card" data-settings-section="gemini" style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="row-between">
+                <h2 class="card-title">Google AI Studio API key</h2>
+                <span id="gemini-key-badge" class="chat-turn-badge">Active · AI Studio</span>
+              </div>
+              <p class="meta" style="margin: 0;">Configures <code>GEMINI_API_KEY</code> (<code>GOOGLE_GENAI_USE_VERTEXAI=FALSE</code>) and hot-reloads the ADK Runner in-memory.</p>
+
+              <label class="meta" for="gemini-key-input">AI Studio API key</label>
+              <div class="input-composite-wrapper" data-composite-input="true">
+                <span class="material-symbols-outlined" style="font-size: 18px;">key</span>
+                <input type="password" id="gemini-key-input" class="input-composite-field" placeholder="Paste AIzaSy... key from aistudio.google.com" />
+              </div>
+
+              <label class="meta" for="default-model-select">Default ADK runner model</label>
+              <select id="default-model-select" class="m3-select">
+                <option value="gemini-2.5-pro" selected>gemini-2.5-pro (Reasoning &amp; Deep Research)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast Assistant)</option>
+              </select>
+
+              <div class="row-between" style="margin-top: 4px; flex-wrap: wrap;">
+                <span id="gemini-test-status" class="status-dot-inline">
+                  <span class="status-dot green"></span>
+                  <span>Ready to verify against models.list()</span>
+                </span>
+                <button type="button" id="save-gemini-key-btn" class="btn-primary">
+                  <span>Test &amp; save key</span>
+                </button>
+              </div>
+            </article>
+
+            <!-- Card 2: Personal Google Workspace OAuth 2.0 -->
+            <article class="card" data-settings-section="workspace" style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="row-between">
+                <h2 class="card-title">Personal Google Workspace OAuth</h2>
+                <span id="workspace-status-badge" class="chat-turn-badge model-badge">Configure OAuth</span>
+              </div>
+              <p class="meta" style="margin: 0;">Authorizes Gmail, Calendar, Drive, and Docs in your personal Workspace domain and persists refresh token to <code>/data/workspace_token.json</code>.</p>
+
+              <label class="meta" for="workspace-client-json">Paste GCP OAuth <code>client_secret.json</code></label>
+              <textarea id="workspace-client-json" class="m3-textarea" rows="2" placeholder='{"installed":{"client_id":"...","client_secret":"..."}}'></textarea>
+
+              <label class="meta" for="email-safety-select">Outbound Gmail safety gate</label>
+              <select id="email-safety-select" class="m3-select">
+                <option value="draft_only" selected>Draft-Only Mode (Agent creates drafts; human sends)</option>
+                <option value="allow_send">Allow Direct Email Sending</option>
+              </select>
+
+              <div class="row-between" style="flex-wrap: wrap;">
+                <button type="button" id="save-workspace-btn" class="btn-card-action">
+                  <span>Save client secret</span>
+                </button>
+                <button type="button" id="authorize-workspace-btn" class="btn-tonal">
+                  <span>Authorize Workspace account</span>
+                </button>
+              </div>
+            </article>
+
+            <!-- Card 3: Google Chat Integration (Pub/Sub Pull + Owner Allowlist) -->
+            <article class="card" data-settings-section="gchat" style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="row-between">
+                <h2 class="card-title">Google Chat bot &amp; Pub/Sub pull</h2>
+                <span id="gchat-status-badge" class="chat-turn-badge">Pub/Sub Ready</span>
+              </div>
+              <p class="meta" style="margin: 0;">Streams Google Chat events via outbound Cloud Pub/Sub pull subscriber and restricts bot execution to your allowlisted Workspace email.</p>
+
+              <label class="meta" for="gchat-project-input">GCP project ID &amp; subscription ID</label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <input type="text" id="gchat-project-input" class="m3-input-field" placeholder="my-workspace-project" />
+                <input type="text" id="gchat-sub-input" class="m3-input-field" value="adk-chat-inbound-sub" />
+              </div>
+
+              <label class="meta" for="gchat-sa-json">Service Account key JSON (<code>Pub/Sub Subscriber</code> + <code>Chat App</code>)</label>
+              <textarea id="gchat-sa-json" class="m3-textarea" rows="2" placeholder='{"type":"service_account","project_id":"..."}'></textarea>
+
+              <label class="meta" for="gchat-allowlist-input">Allowed owner Workspace email allowlist</label>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div class="input-composite-wrapper" data-composite-input="true">
+                  <span style="color: var(--md-sys-color-on-surface-variant);">@</span>
+                  <input type="email" id="gchat-allowlist-input" class="input-composite-field" placeholder="owner@yourdomain.com" />
+                </div>
+                <button type="button" id="save-gchat-btn" class="btn-tonal">
+                  <span>Save &amp; start subscriber</span>
+                </button>
+              </div>
+            </article>
+
+            <!-- Card 4: Headless Chrome & Local Network Security -->
+            <article class="card" data-settings-section="browser" style="display: flex; flex-direction: column; gap: 14px;">
+              <div class="row-between">
+                <h2 class="card-title">Headless Chrome &amp; local Web UI security</h2>
+                <span class="chat-turn-badge">Chromium Ready</span>
+              </div>
+              <p class="meta" style="margin: 0;">Manages persistent Playwright Chromium profile (<code>/data/chrome-profile</code>), step screenshots, and optional local Web UI PIN protection.</p>
+
+              <div class="row-between" style="flex-wrap: wrap;">
+                <span id="browser-test-output" class="status-dot-inline">
+                  <span class="status-dot green"></span>
+                  <span>Playwright Chromium profile active</span>
+                </span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button type="button" id="test-browser-btn" class="btn-tonal">
+                    <span>Test browser launch</span>
+                  </button>
+                  <button type="button" id="clear-browser-btn" class="btn-card-action">
+                    <span>Clear cookies</span>
+                  </button>
+                </div>
+              </div>
+
+              <label class="meta" for="webui-pin-input">Optional local Web UI admin PIN (LAN / Tailscale protection)</label>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div class="input-composite-wrapper" data-composite-input="true">
+                  <input type="password" id="webui-pin-input" class="input-composite-field" placeholder="Set 6-digit PIN or password" />
+                </div>
+                <button type="button" id="save-pin-btn" class="btn-tonal">
+                  <span>Update PIN</span>
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

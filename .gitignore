@@ -1,0 +1,21 @@
+# Never commit runtime data, SQLite databases, or credentials
+data/
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+*secret*.json
+*token*.json
+*credentials*.json
+*service_account*.json
+*.pem
+*.key
+
+# Python & Node artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+node_modules/

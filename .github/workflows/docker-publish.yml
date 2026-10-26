@@ -1,0 +1,84 @@
+name: Build & Publish Container to GHCR
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  secret-hygiene-check:
+    name: Verify Zero Baked-In Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fail if credential files or API keys exist in tracked files
+        run: |
+          set -e
+          echo "Checking tracked git files for forbidden credential files..."
+          if git ls-files | grep -E '(^data/|client_secret\.json|workspace_client_secret\.json|workspace_token\.json|gchat_service_account\.json|config\.json|\.secret\.key|\.env$)'; then
+            echo "::error::Forbidden credential or /data file is tracked by git!"
+            exit 1
+          fi
+          echo "Scanning tracked files for hardcoded AI Studio / GCP keys..."
+          if git grep -E 'AIza[0-9A-Za-z_-]{35}|-----BEGIN PRIVATE KEY-----|GOCSPX-[0-9A-Za-z_-]{28}' -- ':!.github/workflows/docker-publish.yml' ':!tests/'; then
+            echo "::error::Detected hardcoded API key, OAuth secret, or GCP private key in repository!"
+            exit 1
+          fi
+          echo "Secret hygiene check passed."
+
+  build-and-push:
+    name: Build & Push Docker Image to ghcr.io
+    needs: secret-hygiene-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (ghcr.io)
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,47 @@
+services:
+  local-adk-agent:
+    image: ${AGENT_IMAGE:-ghcr.io/garynation/local-adk-agent:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: local-adk-agent
+    restart: unless-stopped
+    # PID 1 init process to reap zombie Chromium subprocesses
+    init: true
+    # 2GB shared memory prevents Chromium renderer SIGBUS / OOM crashes on complex DOMs & PDFs
+    shm_size: "2gb"
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${HOST_PORT:-8080}:8080"
+    environment:
+      - DATA_DIR=/data
+      - GOOGLE_GENAI_USE_VERTEXAI=FALSE
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      # Persistent host directory OUTSIDE the app/Git directory so git pull, git clean,
+      # re-cloning, or `docker compose pull && docker compose up -d` never overwrite
+      # your API keys, OAuth tokens, service account keys, SQLite sessions, or Chrome profile.
+      - ${HOST_DATA_DIR:-~/.config/local-adk-agent/data}:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Optional profile: only started if the user prefers Cloudflare Tunnel over Cloud Pub/Sub for GChat
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: local-adk-cloudflared
+    profiles: ["cloudflare-tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      local-adk-agent:
+        condition: service_healthy

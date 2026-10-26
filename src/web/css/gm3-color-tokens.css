@@ -1,0 +1,234 @@
+/* Google Material 3 (GM3) Canonical Color Tokens — Light + Dark (Bill Skill v2.2).
+   Link this from your entry HTML <head>.
+   STRICT TOKEN RULE: Hex literals live ONLY inside this token definition file.
+   Everywhere in component CSS, HTML, and JS, reference var(--md-sys-color-*).
+   Dark mode activates via html[data-theme="dark"]. */
+
+:root {
+  /* 1. Canonical GM3 System Tokens (Light Mode) */
+  --md-sys-color-primary: #0E57D0;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #D3E3FD;
+  --md-sys-color-on-primary-container: #0842A1;
+  --md-sys-color-secondary: #01639C;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #C1E7FF;
+  --md-sys-color-on-secondary-container: #004A76;
+  --md-sys-color-tertiary: #146C2E;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #C4EED1;
+  --md-sys-color-on-tertiary-container: #125223;
+  --md-sys-color-error: #B3261E;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #F9DEDC;
+  --md-sys-color-on-error-container: #8C1D18;
+  --md-sys-color-background: #F8FAFD;               /* Light Grey page canvas — alias of surface-container-low, never pure white #FFFFFF */
+  --md-sys-color-on-background: #1F1F1F;
+  --md-sys-color-surface: #FFFFFF;                  /* Pure White surface for cards/containers — never for body canvas */
+  --md-sys-color-on-surface: #1F1F1F;
+  --md-sys-color-surface-variant: #E7E0EC;
+  --md-sys-color-on-surface-variant: #444746;
+  --md-sys-color-outline: #747775;
+  --md-sys-color-outline-variant: #C4C7C5;
+  --md-sys-color-text-primary: var(--md-sys-color-on-surface);
+  --md-sys-color-text-secondary: var(--md-sys-color-on-surface-variant);
+  --md-sys-color-text-tertiary: var(--md-sys-color-outline);
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-inverse-surface: #303030;
+  --md-sys-color-inverse-on-surface: #F2F2F2;
+  --md-sys-color-inverse-primary: #A9C7FB;
+  --md-sys-color-surface-tint: #6991D6;
+  --md-sys-color-surface-dim: #D4DBE4;
+  --md-sys-color-surface-bright: #FFFFFF;
+
+  /* 2. 5-Step Tonal Surface Container Hierarchy (Light Mode) */
+  --md-sys-color-surface-container-lowest: #FFFFFF;  /* Elevated main-area cards (.card) */
+  --md-sys-color-surface-container-low: #F8FAFD;     /* Uniform app shell (top bar, left nav, canvas) */
+  --md-sys-color-surface-container: #F0F4F9;         /* Nested sub-cards & Kanban column wells */
+  --md-sys-color-surface-container-high: #E9EEF6;    /* Borderless search/composer pills & hover fills */
+  --md-sys-color-surface-container-highest: #DDE3EA; /* Unselected morphing tabs, neutral pills & tracks */
+
+  /* 3. Fixed Accent Tokens */
+  --md-sys-color-primary-fixed: #D3E3FD;
+  --md-sys-color-on-primary-fixed: #031E49;
+  --md-sys-color-primary-fixed-dim: #A9C7FB;
+  --md-sys-color-on-primary-fixed-variant: #0842A1;
+  --md-sys-color-secondary-fixed: #C1E7FF;
+  --md-sys-color-on-secondary-fixed: #011D36;
+  --md-sys-color-secondary-fixed-dim: #80CFFF;
+  --md-sys-color-on-secondary-fixed-variant: #004A76;
+  --md-sys-color-tertiary-fixed: #C4EED1;
+  --md-sys-color-on-tertiary-fixed: #052712;
+  --md-sys-color-tertiary-fixed-dim: #6DD58C;
+  --md-sys-color-on-tertiary-fixed-variant: #125223;
+
+  /* 4. Paired Tonal Hue Tokens (WCAG AA >= 4.5:1 Verified) */
+  --md-sys-color-blue-tonal: #DBEAFE;
+  --md-sys-color-on-blue-tonal: #1E40AF;
+  --md-sys-color-green-tonal: #DCFCE7;
+  --md-sys-color-on-green-tonal: #166534;
+  --md-sys-color-amber-tonal: #FEF3C7;
+  --md-sys-color-on-amber-tonal: #92400E;
+  --md-sys-color-yellow-tonal: #FEF3C7;
+  --md-sys-color-on-yellow-tonal: #92400E;
+  --md-sys-color-orange-tonal: #FFEDD5;
+  --md-sys-color-on-orange-tonal: #9A3412;
+  --md-sys-color-red-tonal: #FFE4E6;
+  --md-sys-color-on-red-tonal: #9F1239;
+  --md-sys-color-purple-tonal: #F3E8FF;
+  --md-sys-color-on-purple-tonal: #6B21A8;
+  --md-sys-color-teal-tonal: #CCFBF1;
+  --md-sys-color-on-teal-tonal: #115E59;
+  --md-sys-color-cyan-tonal: #CFFAFE;
+  --md-sys-color-on-cyan-tonal: #155E75;
+
+  /* 5. Semantic Status Container Tokens (Auto-Adapting Light/Dark) */
+  --md-sys-color-status-success-container: var(--md-sys-color-green-tonal);
+  --md-sys-color-on-status-success-container: var(--md-sys-color-on-green-tonal);
+  --md-sys-color-status-warning-container: var(--md-sys-color-amber-tonal);
+  --md-sys-color-on-status-warning-container: var(--md-sys-color-on-amber-tonal);
+  --md-sys-color-status-error-container: var(--md-sys-color-red-tonal);
+  --md-sys-color-on-status-error-container: var(--md-sys-color-on-red-tonal);
+  --md-sys-color-status-info-container: var(--md-sys-color-blue-tonal);
+  --md-sys-color-on-status-info-container: var(--md-sys-color-on-blue-tonal);
+  --md-sys-color-status-active-container: var(--md-sys-color-purple-tonal);
+  --md-sys-color-on-status-active-container: var(--md-sys-color-on-purple-tonal);
+  --md-sys-color-status-teal-container: var(--md-sys-color-teal-tonal);
+  --md-sys-color-on-status-teal-container: var(--md-sys-color-on-teal-tonal);
+  --md-sys-color-status-neutral-container: var(--md-sys-color-surface-container-highest);
+  --md-sys-color-on-status-neutral-container: var(--md-sys-color-on-surface-variant);
+
+  /* 6. Deterministic 6-Hue Tonal Avatar Palette Tokens */
+  --md-sys-color-avatar-1-container: var(--md-sys-color-blue-tonal);
+  --md-sys-color-on-avatar-1-container: var(--md-sys-color-on-blue-tonal);
+  --md-sys-color-avatar-2-container: var(--md-sys-color-purple-tonal);
+  --md-sys-color-on-avatar-2-container: var(--md-sys-color-on-purple-tonal);
+  --md-sys-color-avatar-3-container: var(--md-sys-color-teal-tonal);
+  --md-sys-color-on-avatar-3-container: var(--md-sys-color-on-teal-tonal);
+  --md-sys-color-avatar-4-container: var(--md-sys-color-green-tonal);
+  --md-sys-color-on-avatar-4-container: var(--md-sys-color-on-green-tonal);
+  --md-sys-color-avatar-5-container: var(--md-sys-color-amber-tonal);
+  --md-sys-color-on-avatar-5-container: var(--md-sys-color-on-amber-tonal);
+  --md-sys-color-avatar-6-container: var(--md-sys-color-cyan-tonal);
+  --md-sys-color-on-avatar-6-container: var(--md-sys-color-on-cyan-tonal);
+
+  /* 7. Typography Family Tokens (2-Typeface Pairing: Google Sans Flex + Inter with tabular-nums) */
+  --md-ref-typeface-brand: 'Google Sans Flex', 'Google Sans', sans-serif;
+  --md-ref-typeface-plain: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --md-ref-typeface-mono: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-display: var(--md-ref-typeface-brand);
+  --font-family-body: var(--md-ref-typeface-plain);
+}
+
+/* Canonical GM3 System Tokens (Dark Mode) */
+[data-theme='dark'] {
+  --md-sys-color-primary: #A7C7FA;
+  --md-sys-color-on-primary: #072E70;
+  --md-sys-color-primary-container: #0842A1;
+  --md-sys-color-on-primary-container: #D3E3FD;
+  --md-sys-color-secondary: #80CFFF;
+  --md-sys-color-on-secondary: #003355;
+  --md-sys-color-secondary-container: #004A77;
+  --md-sys-color-on-secondary-container: #C1E7FF;
+  --md-sys-color-tertiary: #6DD58C;
+  --md-sys-color-on-tertiary: #0A3818;
+  --md-sys-color-tertiary-container: #125223;
+  --md-sys-color-on-tertiary-container: #C4EED1;
+  --md-sys-color-error: #F1B8B5;
+  --md-sys-color-on-error: #5F1410;
+  --md-sys-color-error-container: #8C1D18;
+  --md-sys-color-on-error-container: #F9DEDC;
+  --md-sys-color-background: #131314;
+  --md-sys-color-on-background: #E3E3E3;
+  --md-sys-color-surface: #131314;
+  --md-sys-color-on-surface: #E3E3E3;
+  --md-sys-color-surface-variant: #49454F;
+  --md-sys-color-on-surface-variant: #C4C7C5;
+  --md-sys-color-outline: #8E918F;
+  --md-sys-color-outline-variant: #444746;
+  --md-sys-color-text-primary: var(--md-sys-color-on-surface);
+  --md-sys-color-text-secondary: var(--md-sys-color-on-surface-variant);
+  --md-sys-color-text-tertiary: var(--md-sys-color-outline);
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-inverse-surface: #E3E3E3;
+  --md-sys-color-inverse-on-surface: #131314;
+  --md-sys-color-inverse-primary: #0E57D0;
+  --md-sys-color-surface-tint: #A7C7FA;
+  --md-sys-color-surface-dim: #131314;
+  --md-sys-color-surface-bright: #39393A;
+
+  /* 5-Step Tonal Surface Container Hierarchy (Dark Mode) */
+  --md-sys-color-surface-container-lowest: #1E1F22;
+  --md-sys-color-surface-container-low: #131314;
+  --md-sys-color-surface-container: #282A2E;
+  --md-sys-color-surface-container-high: #33353A;
+  --md-sys-color-surface-container-highest: #3F4147;
+
+  /* Paired Tonal Hue Tokens (Dark Mode — High-Contrast Legibility) */
+  --md-sys-color-blue-tonal: rgba(30, 58, 138, 0.45);
+  --md-sys-color-on-blue-tonal: #93C5FD;
+  --md-sys-color-green-tonal: rgba(20, 83, 45, 0.45);
+  --md-sys-color-on-green-tonal: #86EFAC;
+  --md-sys-color-amber-tonal: rgba(120, 53, 15, 0.45);
+  --md-sys-color-on-amber-tonal: #FCD34D;
+  --md-sys-color-yellow-tonal: rgba(120, 53, 15, 0.45);
+  --md-sys-color-on-yellow-tonal: #FCD34D;
+  --md-sys-color-orange-tonal: rgba(124, 45, 18, 0.45);
+  --md-sys-color-on-orange-tonal: #FDBA74;
+  --md-sys-color-red-tonal: rgba(136, 19, 55, 0.45);
+  --md-sys-color-on-red-tonal: #FDA4AF;
+  --md-sys-color-purple-tonal: rgba(88, 28, 135, 0.45);
+  --md-sys-color-on-purple-tonal: #D8B4FE;
+  --md-sys-color-teal-tonal: rgba(19, 78, 74, 0.45);
+  --md-sys-color-on-teal-tonal: #5EEAD4;
+  --md-sys-color-cyan-tonal: rgba(22, 78, 99, 0.45);
+  --md-sys-color-on-cyan-tonal: #67E8F9;
+
+  /* Semantic Status Container Tokens (Dark Mode) */
+  --md-sys-color-status-success-container: var(--md-sys-color-green-tonal);
+  --md-sys-color-on-status-success-container: var(--md-sys-color-on-green-tonal);
+  --md-sys-color-status-warning-container: var(--md-sys-color-amber-tonal);
+  --md-sys-color-on-status-warning-container: var(--md-sys-color-on-amber-tonal);
+  --md-sys-color-status-error-container: var(--md-sys-color-red-tonal);
+  --md-sys-color-on-status-error-container: var(--md-sys-color-on-red-tonal);
+  --md-sys-color-status-info-container: var(--md-sys-color-blue-tonal);
+  --md-sys-color-on-status-info-container: var(--md-sys-color-on-blue-tonal);
+  --md-sys-color-status-active-container: var(--md-sys-color-purple-tonal);
+  --md-sys-color-on-status-active-container: var(--md-sys-color-on-purple-tonal);
+  --md-sys-color-status-teal-container: var(--md-sys-color-teal-tonal);
+  --md-sys-color-on-status-teal-container: var(--md-sys-color-on-teal-tonal);
+  --md-sys-color-status-neutral-container: var(--md-sys-color-surface-container-highest);
+  --md-sys-color-on-status-neutral-container: var(--md-sys-color-on-surface-variant);
+}
+
+::selection {
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  caret-color: var(--md-sys-color-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+h4,
+.card-title,
+.section-title {
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
