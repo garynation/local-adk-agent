@@ -198,8 +198,9 @@ class RuntimeConfig(BaseModel):
     gemini_api_key_encrypted: Optional[str] = None
     gemini_api_key: str = Field(default="", exclude=True)
     google_genai_use_vertexai: bool = False
-    default_model: str = "gemini-4.0-pro"
-    fast_model: str = "gemini-4.0-flash"
+    default_model: str = "gemini-4-argon"
+    fast_model: str = "gemini-3.8-flash"
+    available_models: list[str] = Field(default_factory=list)
     temperature: float = 0.2
     deep_research_engine: str = Field(
         default="hybrid",
@@ -270,6 +271,21 @@ class RuntimeConfig(BaseModel):
         if not isinstance(data, dict):
             return data
         out = dict(data)
+
+        # Auto-migrate any non-existent Gemini 4 alias IDs to canonical v1beta model IDs
+        alias_map = {
+            "gemini-4.0-pro": "gemini-4-argon",
+            "gemini-4-pro": "gemini-4-argon",
+            "gemini-4.0-ultra": "gemini-4-argon",
+            "gemini-4.0-flash": "gemini-4-argon",
+            "gemini-4-flash": "gemini-4-argon",
+            "gemini-3.0-pro": "gemini-3.1-pro-preview",
+            "gemini-3.0-flash": "gemini-3.8-flash",
+        }
+        if out.get("default_model") in alias_map:
+            out["default_model"] = alias_map[out["default_model"]]
+        if out.get("fast_model") in alias_map:
+            out["fast_model"] = "gemini-3.8-flash"
 
         # Synchronize email_safety_mode / gmail_safety_mode / workspace_draft_only_mode
         email_mode = out.get("email_safety_mode")
@@ -636,13 +652,18 @@ class ConfigManager:
         try:
             client = genai.Client(api_key=cleaned, vertexai=False)
             available_models: list[str] = []
-            pager = await client.aio.models.list(config={"page_size": 25})
+            pager = await client.aio.models.list(config={"page_size": 100})
             async for m in pager:
                 if m and getattr(m, "name", None):
+                    actions = getattr(m, "supported_actions", None) or getattr(
+                        m, "supported_generation_methods", None
+                    )
+                    if actions and "generateContent" not in actions:
+                        continue
                     available_models.append(m.name.removeprefix("models/"))
             return {
                 "valid": True,
-                "models_sample": available_models[:10],
+                "models_sample": available_models,
                 "models_count": len(available_models),
             }
         except Exception as exc:

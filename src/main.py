@@ -205,18 +205,26 @@ def _build_masked_config_status(cfg_mgr: Any, gchat_bridge: Any = None) -> dict[
             "gemini_configured": bool(api_key),
             "gemini_key_configured": bool(api_key),
             "gemini_key_masked": masked_key or "",
-            "default_model": _cfg_attr(cfg, "default_model", "gemini-4.0-pro"),
-            "fast_model": _cfg_attr(cfg, "fast_model", "gemini-4.0-flash"),
-            "available_models": [
-                "gemini-4.0-pro",
-                "gemini-4.0-flash",
-                "gemini-4.0-ultra",
-                "gemini-4-pro",
-                "gemini-4-flash",
+            "default_model": _cfg_attr(cfg, "default_model", "gemini-4-argon"),
+            "fast_model": _cfg_attr(cfg, "fast_model", "gemini-3.8-flash"),
+            "available_models": _cfg_attr(cfg, "available_models", None) or [
+                "gemini-4-argon",
+                "gemini-3.8-flash",
+                "gemini-3.7-flash",
+                "gemini-3.6-flash",
+                "gemini-3.5-flash",
+                "gemini-3.5-flash-lite",
                 "gemini-3.1-pro-preview",
-                "gemini-3.0-pro",
-                "gemini-3.0-flash",
+                "gemini-3.1-pro-preview-customtools",
+                "gemini-3.1-flash-lite",
                 "gemini-3-flash-preview",
+                "antigravity-preview-latest",
+                "deep-research-max-preview-04-2026",
+                "deep-research-preview-04-2026",
+                "gemma-4-31b-it",
+                "gemma-4-26b-a4b-it",
+                "gemini-pro-latest",
+                "gemini-flash-latest",
                 "gemini-2.5-pro",
                 "gemini-2.5-flash",
                 "gemini-2.5-flash-lite",
@@ -677,15 +685,15 @@ async def get_config_status(request: Request) -> dict[str, Any]:
 class GeminiKeyPayload(BaseModel):
     api_key: str = ""
     model: str | None = None
-    default_model: str = "gemini-4.0-pro"
-    fast_model: str = "gemini-4.0-flash"
+    default_model: str = "gemini-4-argon"
+    fast_model: str = "gemini-3.8-flash"
     temperature: float = 0.2
     max_research_iterations: int = 3
     skip_validation: bool = False
 
 
 class ModelUpdatePayload(BaseModel):
-    default_model: str = "gemini-4.0-pro"
+    default_model: str = "gemini-4-argon"
     fast_model: str | None = None
 
 
@@ -693,12 +701,12 @@ class ModelUpdatePayload(BaseModel):
 async def update_default_model(payload: ModelUpdatePayload, request: Request) -> dict[str, Any]:
     """Updates default_model (and optionally fast_model) in /data/config.json and hot-reloads ADK."""
     cfg_mgr = _resolve_config_manager(request)
-    chosen = (payload.default_model or "gemini-4.0-pro").strip()
+    chosen = (payload.default_model or "gemini-4-argon").strip()
     updates: dict[str, Any] = {"default_model": chosen}
     if payload.fast_model:
         updates["fast_model"] = payload.fast_model.strip()
     elif chosen.startswith("gemini-4"):
-        updates["fast_model"] = "gemini-4.0-flash"
+        updates["fast_model"] = "gemini-3.8-flash"
     await _update_config_fields(cfg_mgr, **updates)
     try:
         runner_mgr = _resolve_runner_manager(request)

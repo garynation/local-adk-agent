@@ -65,13 +65,26 @@ You have access to four core capability domains:
 """
 
 
+_MODEL_ALIAS_MAP = {
+    "gemini-4.0-pro": "gemini-4-argon",
+    "gemini-4-pro": "gemini-4-argon",
+    "gemini-4.0-ultra": "gemini-4-argon",
+    "gemini-4.0-flash": "gemini-4-argon",
+    "gemini-4-flash": "gemini-4-argon",
+    "gemini-3.0-pro": "gemini-3.1-pro-preview",
+    "gemini-3.0-flash": "gemini-3.8-flash",
+}
+
+
 def _build_gemini_model(model_name: str, api_key: Optional[str]) -> Gemini:
     """Creates an ADK Gemini model explicitly bound to the AI Studio API key (vertexai=False)."""
+    cleaned_model = (model_name or "gemini-4-argon").strip().removeprefix("models/")
+    resolved_model = _MODEL_ALIAS_MAP.get(cleaned_model, cleaned_model)
     client_kwargs: dict[str, Any] = {"vertexai": False}
     if api_key:
         client_kwargs["api_key"] = api_key
     return Gemini(
-        model=model_name,
+        model=resolved_model,
         client_kwargs=client_kwargs,
         retry_options=types.HttpRetryOptions(initial_delay=1.0, attempts=3),
     )

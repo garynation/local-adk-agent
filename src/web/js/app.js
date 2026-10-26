@@ -555,7 +555,7 @@
       chatStream.appendChild(userTurn);
 
       var modelSelect = document.getElementById('model-select');
-      var selectedModel = modelSelect ? modelSelect.value : 'gemini-4.0-pro';
+      var selectedModel = modelSelect ? modelSelect.value : 'gemini-4-argon';
       var isDeepResearch = currentMode === 'deep_research';
 
       var assistantTurn = document.createElement('article');
@@ -773,7 +773,7 @@
       var statusSpan = document.getElementById('gemini-test-status');
       var apiKey = keyInput ? keyInput.value.trim() : '';
       var customModel = customModelInput ? customModelInput.value.trim() : '';
-      var chosenModel = customModel || (modelSel ? modelSel.value : 'gemini-4.0-pro');
+      var chosenModel = customModel || (modelSel ? modelSel.value : 'gemini-4-argon');
       var hasMaskedKey = keyInput && keyInput.placeholder && keyInput.placeholder.indexOf('*') !== -1;
       if (!apiKey && !hasMaskedKey) {
         // Still allow saving the default model even before an API key is entered
