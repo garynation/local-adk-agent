@@ -402,6 +402,10 @@
           <span class="material-symbols-outlined">chat</span>
           <span class="nav-label">Chat &amp; Research</span>
         </button>
+        <button type="button" class="nav-item" data-view="schedules" data-view-target="schedules">
+          <span class="material-symbols-outlined">schedule</span>
+          <span class="nav-label">Scheduled Tasks</span>
+        </button>
         <button type="button" class="nav-item" data-view="settings" data-view-target="settings">
           <span class="material-symbols-outlined">tune</span>
           <span class="nav-label">Configuration &amp; Keys</span>
@@ -523,7 +527,99 @@
         </section>
 
         <!-- =================================================================
-             VIEW 2: LIVE CONFIGURATION & ONBOARDING CONSOLE (Mode 2: 1280px)
+             VIEW 2: SCHEDULED TASKS & WEB SCRAPING CONSOLE (Mode 2: 1280px)
+             ================================================================= -->
+        <section id="view-schedules" class="settings-canvas view-panel" hidden>
+          <div class="card">
+            <div class="row-between" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h1 style="font-size: 20px; margin: 0;">Scheduled tasks &amp; recurring web scraping</h1>
+                <p class="meta" style="margin: 4px 0 0;">Automate Headless Chrome scrapes, price/stock monitors, and Deep Research briefings. Persisted in <code>/data/schedules.json</code> and also manageable via natural language in Chat.</p>
+              </div>
+              <button type="button" id="refresh-schedules-btn" class="btn-tonal">
+                <span class="material-symbols-outlined">refresh</span>
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <!-- Left Card: Create New Scheduled Scrape or Research Job -->
+            <article class="card" style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="row-between">
+                <h2 class="card-title">New scheduled task</h2>
+                <span class="chat-turn-badge">Headless Chrome · Cron</span>
+              </div>
+
+              <label class="meta" for="sched-name-input">Task name</label>
+              <input type="text" id="sched-name-input" class="m3-input-field" placeholder="e.g., Daily Competitor Pricing &amp; Stock Scrape" />
+
+              <label class="meta" for="sched-url-input">Target URL for Headless Chrome (optional)</label>
+              <input type="url" id="sched-url-input" class="m3-input-field" placeholder="https://example.com/pricing" />
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label class="meta" for="sched-cron-select">Schedule frequency</label>
+                  <select id="sched-cron-select" class="m3-select">
+                    <option value="*/30 * * * *">Every 30 minutes (*/30 * * * *)</option>
+                    <option value="0 * * * *">Every hour (0 * * * *)</option>
+                    <option value="0 */6 * * *">Every 6 hours (0 */6 * * *)</option>
+                    <option value="0 8 * * *" selected>Daily at 08:00 (0 8 * * *)</option>
+                    <option value="30 8 * * 1-5">Weekdays at 08:30 (30 8 * * 1-5)</option>
+                    <option value="0 9 * * 1">Weekly Monday 09:00 (0 9 * * 1)</option>
+                  </select>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label class="meta" for="sched-custom-cron-input">Custom cron override</label>
+                  <input type="text" id="sched-custom-cron-input" class="m3-input-field" placeholder="e.g., 15 */4 * * *" />
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label class="meta" for="sched-mode-select">Execution mode</label>
+                  <select id="sched-mode-select" class="m3-select">
+                    <option value="scrape" selected>Headless Chrome Web Scrape</option>
+                    <option value="deep_research">Multi-Step Deep Research</option>
+                    <option value="standard">Standard Agent Prompt</option>
+                  </select>
+                </div>
+                <label class="row-inline" style="cursor: pointer; padding-bottom: 8px;">
+                  <input type="checkbox" id="sched-diff-checkbox" checked />
+                  <span class="meta">Compare against previous run (Diff detection)</span>
+                </label>
+              </div>
+
+              <label class="meta" for="sched-prompt-input">Scraping / extraction instructions</label>
+              <textarea id="sched-prompt-input" class="m3-textarea" rows="3" placeholder="Extract the pricing tiers, stock availability, or headlines into a clean Markdown table and highlight any changes since the last run."></textarea>
+
+              <div class="row-between" style="margin-top: 4px; flex-wrap: wrap;">
+                <span id="sched-create-status" class="status-dot-inline">
+                  <span class="status-dot green"></span>
+                  <span>Saves to <code>/data/schedules.json</code></span>
+                </span>
+                <button type="button" id="create-schedule-btn" class="btn-primary">
+                  <span class="material-symbols-outlined">add_alarm</span>
+                  <span>Create schedule</span>
+                </button>
+              </div>
+            </article>
+
+            <!-- Right Card: Active Schedules & Latest Scrape Results -->
+            <article class="card" style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="row-between">
+                <h2 class="card-title">Configured schedules <span id="schedules-count-label" class="header-count">· 0</span></h2>
+                <span class="meta">Exports saved to <code>/data/exports/</code></span>
+              </div>
+              <div id="schedules-list" style="display: flex; flex-direction: column; gap: 12px;">
+                <p class="meta" style="margin: 0;">No scheduled tasks yet. Create one on the left or ask the agent in Chat (e.g. &ldquo;Schedule a daily 8am scrape of https://...&rdquo;).</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- =================================================================
+             VIEW 3: LIVE CONFIGURATION & ONBOARDING CONSOLE (Mode 2: 1280px)
              ================================================================= -->
         <section id="view-settings" class="settings-canvas view-panel" hidden>
           <div class="card">

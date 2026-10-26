@@ -309,7 +309,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("GChatPubSubBridge initialization deferred: %s", exc)
 
+    task_scheduler = None
+    try:
+        from src.core.scheduler import get_task_scheduler
+
+        task_scheduler = get_task_scheduler()
+        app.state.task_scheduler = task_scheduler
+        await task_scheduler.start()
+    except Exception as exc:
+        logger.warning("TaskScheduler initialization deferred: %s", exc)
+
     yield
+
+    if task_scheduler is not None:
+        try:
+            await task_scheduler.stop()
+        except Exception:
+            pass
 
     if gchat_bridge is not None and hasattr(gchat_bridge, "stop"):
         try:
@@ -1351,3 +1367,93 @@ async def webui_auth_status(request: Request) -> dict[str, Any]:
         "admin_pin_enabled": bool(pin_hash),
         "webui_auth_enabled": bool(pin_hash),
     }
+
+
+# ---------------------------------------------------------------------------
+# 9. Scheduled Tasks & Recurring Web Scraping Endpoints (/api/schedules/*)
+# ---------------------------------------------------------------------------
+class ScheduledTaskPayload(BaseModel):
+    id: str | None = None
+    name: str
+    prompt: str = ""
+    target_url: str = ""
+    schedule: str = "0 8 * * *"
+    mode: str = "scrape"
+    model: str | None = None
+    enabled: bool = True
+    only_on_change: bool = False
+    notify_gchat: bool = False
+
+
+@app.get("/api/schedules")
+async def list_scheduled_tasks_endpoint() -> dict[str, Any]:
+    from src.core.scheduler import get_task_scheduler
+
+    scheduler = get_task_scheduler()
+    tasks = scheduler.list_tasks()
+    return {"status": "ok", "schedules": tasks}
+
+
+@app.post("/api/schedules")
+async def create_or_update_scheduled_task_endpoint(
+    payload: ScheduledTaskPayload,
+) -> dict[str, Any]:
+    from src.core.scheduler import get_task_scheduler
+
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Task name is required.")
+    if not payload.prompt.strip() and not payload.target_url.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either scraping/research instructions or a target URL.",
+        )
+
+    scheduler = get_task_scheduler()
+    created = scheduler.create_or_update_task(
+        task_id=payload.id,
+        name=payload.name,
+        prompt=payload.prompt,
+        target_url=payload.target_url,
+        schedule=payload.schedule,
+        mode=payload.mode,
+        model=payload.model,
+        enabled=payload.enabled,
+        only_on_change=payload.only_on_change,
+        notify_gchat=payload.notify_gchat,
+    )
+    return {"status": "ok", "task": created}
+
+
+@app.post("/api/schedules/{task_id}/run")
+async def run_scheduled_task_now_endpoint(task_id: str) -> dict[str, Any]:
+    from src.core.scheduler import get_task_scheduler
+
+    scheduler = get_task_scheduler()
+    try:
+        res = await scheduler.execute_task(task_id, triggered_by="manual")
+        return res
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/schedules/{task_id}/toggle")
+async def toggle_scheduled_task_endpoint(task_id: str) -> dict[str, Any]:
+    from src.core.scheduler import get_task_scheduler
+
+    scheduler = get_task_scheduler()
+    updated = scheduler.toggle_task(task_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
+    return {"status": "ok", "task": updated}
+
+
+@app.delete("/api/schedules/{task_id}")
+async def delete_scheduled_task_endpoint(task_id: str) -> dict[str, Any]:
+    from src.core.scheduler import get_task_scheduler
+
+    scheduler = get_task_scheduler()
+    removed = scheduler.delete_task(task_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
+    return {"status": "ok", "deleted": task_id}
+

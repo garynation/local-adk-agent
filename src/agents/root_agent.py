@@ -62,6 +62,10 @@ You have access to four core capability domains:
 4. **Headless Chrome Automation (Playwright)**:
    - Use browser tools to navigate interactive websites, inspect DOM elements, fill forms, extract tables,
      and capture screenshots to `/data/screenshots/`.
+5. **Scheduled Tasks & Recurring Web Scraping (`create_scheduled_task`, `list_scheduled_tasks`, `delete_or_toggle_scheduled_task`)**:
+   - When the user asks to schedule a recurring web scrape, price/stock check, page monitor, or daily briefing,
+     call `create_scheduled_task` with a 5-field cron expression (e.g. `0 8 * * *` for 08:00 daily, `*/30 * * * *` for every 30m)
+     and `target_url` for Headless Chrome scraping.
 
 ### Response Formatting Standards
 - Always format responses in clean, professional GitHub-Flavored Markdown (GFM):
@@ -182,10 +186,19 @@ def build_personal_assistant_root_agent(
         func=run_gemini_deep_research_interaction
     )
 
+    scheduler_tools: list[Any] = []
+    try:
+        from ..core.scheduler import get_scheduler_tools
+
+        scheduler_tools = get_scheduler_tools()
+    except Exception as exc:
+        logger.debug("Scheduler tools not loaded: %s", exc)
+
     all_root_tools: list[Any] = [
         search_agent_tool,
         deep_research_workflow_tool,
         interactions_deep_research_tool,
+        *scheduler_tools,
         *resolved_workspace_tools,
         *resolved_browser_tools,
     ]

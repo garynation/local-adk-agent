@@ -114,37 +114,45 @@
   });
 
   // ---------------------------------------------------------------------------
-  // 3. View Switching (#view-workbench <-> #view-settings)
+  // 3. View Switching (#view-workbench <-> #view-schedules <-> #view-settings)
   // ---------------------------------------------------------------------------
   var viewWorkbench = document.getElementById('view-workbench');
+  var viewSchedules = document.getElementById('view-schedules');
   var viewSettings = document.getElementById('view-settings');
   var navItems = Array.prototype.slice.call(
     document.querySelectorAll('.nav-item[data-view]')
   );
 
+  function setPanelVisible(panel, isVisible) {
+    if (!panel) return;
+    if (isVisible) {
+      panel.hidden = false;
+      panel.removeAttribute('hidden');
+      panel.classList.add('active');
+      panel.style.display = '';
+    } else {
+      panel.hidden = true;
+      panel.setAttribute('hidden', '');
+      panel.classList.remove('active');
+      panel.style.display = 'none';
+    }
+  }
+
   function switchView(targetView) {
-    var normalized = targetView === 'settings' ? 'settings' : 'workbench';
-    if (viewWorkbench && viewSettings) {
-      if (normalized === 'settings') {
-        viewWorkbench.hidden = true;
-        viewWorkbench.setAttribute('hidden', '');
-        viewWorkbench.classList.remove('active');
-        viewWorkbench.style.display = 'none';
-        viewSettings.hidden = false;
-        viewSettings.removeAttribute('hidden');
-        viewSettings.classList.add('active');
-        viewSettings.style.display = '';
-      } else {
-        viewSettings.hidden = true;
-        viewSettings.setAttribute('hidden', '');
-        viewSettings.classList.remove('active');
-        viewSettings.style.display = 'none';
-        viewWorkbench.hidden = false;
-        viewWorkbench.removeAttribute('hidden');
-        viewWorkbench.classList.add('active');
-        viewWorkbench.style.display = '';
-        scrollChatToBottom();
-      }
+    var normalized =
+      targetView === 'settings'
+        ? 'settings'
+        : targetView === 'schedules'
+          ? 'schedules'
+          : 'workbench';
+    setPanelVisible(viewWorkbench, normalized === 'workbench');
+    setPanelVisible(viewSchedules, normalized === 'schedules');
+    setPanelVisible(viewSettings, normalized === 'settings');
+
+    if (normalized === 'workbench') {
+      scrollChatToBottom();
+    } else if (normalized === 'schedules' && typeof loadSchedulesList === 'function') {
+      loadSchedulesList();
     }
     navItems.forEach(function (btn) {
       var isMatch = btn.getAttribute('data-view') === normalized;
@@ -172,6 +180,8 @@
     var queryView = (params.get('view') || params.get('settings') || '').toLowerCase();
     if (hash === 'settings' || queryView === 'settings' || queryView === 'workspace') {
       switchView('settings');
+    } else if (hash === 'schedules' || queryView === 'schedules') {
+      switchView('schedules');
     } else {
       switchView('workbench');
     }
@@ -1300,4 +1310,276 @@
       });
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // 8. Scheduled Tasks & Recurring Web Scraping Console (/api/schedules/*)
+  // ---------------------------------------------------------------------------
+  function formatTimestamp(ts) {
+    if (!ts) return 'Never';
+    try {
+      return new Date(Number(ts) * 1000).toLocaleString();
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  function loadSchedulesList() {
+    var listEl = document.getElementById('schedules-list');
+    var countEl = document.getElementById('schedules-count-label');
+    if (!listEl) return;
+
+    fetch('/api/schedules')
+      .then(function (r) {
+        return r.ok ? r.json() : { schedules: [] };
+      })
+      .then(function (data) {
+        var items = data && Array.isArray(data.schedules) ? data.schedules : [];
+        if (countEl) {
+          countEl.textContent = '· ' + items.length;
+        }
+        if (items.length === 0) {
+          listEl.innerHTML =
+            '<p class="meta" style="margin: 0;">No scheduled tasks yet. Create one on the left or ask the agent in Chat (e.g. &ldquo;Schedule a daily 8am scrape of https://...&rdquo;).</p>';
+          return;
+        }
+        listEl.innerHTML = items
+          .map(function (t) {
+            var isEnabled = t.enabled !== false;
+            var statusColor =
+              t.last_status === 'error'
+                ? 'red'
+                : t.last_status === 'running'
+                  ? 'blue'
+                  : isEnabled
+                    ? 'green'
+                    : 'amber';
+            var statusLabel =
+              t.last_status === 'running'
+                ? 'Running now...'
+                : isEnabled
+                  ? 'Active · Next: ' + formatTimestamp(t.next_run_at)
+                  : 'Paused';
+            var lastOutputMd = (t.last_output || '').trim();
+            return (
+              '<div class="card-nested" style="background: var(--md-sys-color-surface-container); gap: 10px;">' +
+              '  <div class="row-between" style="flex-wrap: wrap;">' +
+              '    <div>' +
+              '      <strong style="font-size: 14px;">' +
+              escapeHtml(t.name) +
+              '</strong>' +
+              '      <div class="meta">Cron: <code>' +
+              escapeHtml(t.schedule) +
+              '</code> · Mode: <code>' +
+              escapeHtml(t.mode || 'scrape') +
+              '</code> · Runs: ' +
+              (t.run_count || 0) +
+              '</div>' +
+              '    </div>' +
+              '    <span class="status-dot-inline"><span class="status-dot ' +
+              statusColor +
+              '"></span><span>' +
+              escapeHtml(statusLabel) +
+              '</span></span>' +
+              '  </div>' +
+              (t.target_url
+                ? '<div class="meta">Target URL: <a href="' +
+                  escapeHtml(t.target_url) +
+                  '" target="_blank" rel="noopener noreferrer" style="color: var(--md-sys-color-primary);">' +
+                  escapeHtml(t.target_url) +
+                  '</a></div>'
+                : '') +
+              (t.prompt
+                ? '<div class="meta">' + escapeHtml(t.prompt) + '</div>'
+                : '') +
+              (lastOutputMd
+                ? '<div class="step-trace-box">' +
+                  '  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">' +
+                  '    <span class="row-inline"><span class="material-symbols-outlined">description</span><span>Latest scrape result (' +
+                  escapeHtml(formatTimestamp(t.last_run_at)) +
+                  ')</span></span>' +
+                  '    <span class="material-symbols-outlined">expand_more</span>' +
+                  '  </button>' +
+                  '  <div class="step-trace-body md-prose" hidden>' +
+                  renderMarkdown(lastOutputMd) +
+                  '  </div>' +
+                  '</div>'
+                : '') +
+              '  <div class="chat-inline-actions">' +
+              '    <div class="chat-action-group">' +
+              '      <button type="button" class="chat-action-btn primary-tonal" data-sched-run="' +
+              escapeHtml(t.id) +
+              '"><span class="material-symbols-outlined">play_arrow</span><span>Run now</span></button>' +
+              '      <button type="button" class="chat-action-btn" data-sched-open="' +
+              escapeHtml(t.session_id || 'sched_' + t.id) +
+              '" data-sched-title="' +
+              escapeHtml(t.name) +
+              '"><span class="material-symbols-outlined">open_in_new</span><span>Open in Chat</span></button>' +
+              '    </div>' +
+              '    <div class="chat-action-group">' +
+              '      <button type="button" class="chat-action-btn" data-sched-toggle="' +
+              escapeHtml(t.id) +
+              '"><span>' +
+              (isEnabled ? 'Pause' : 'Resume') +
+              '</span></button>' +
+              '      <button type="button" class="chat-action-btn" data-sched-delete="' +
+              escapeHtml(t.id) +
+              '"><span class="material-symbols-outlined">delete</span></button>' +
+              '    </div>' +
+              '  </div>' +
+              '</div>'
+            );
+          })
+          .join('');
+      })
+      .catch(function () {});
+  }
+
+  loadSchedulesList();
+
+  var refreshSchedulesBtn = document.getElementById('refresh-schedules-btn');
+  if (refreshSchedulesBtn) {
+    refreshSchedulesBtn.addEventListener('click', loadSchedulesList);
+  }
+
+  var createScheduleBtn = document.getElementById('create-schedule-btn');
+  if (createScheduleBtn) {
+    createScheduleBtn.addEventListener('click', function () {
+      var nameIn = document.getElementById('sched-name-input');
+      var urlIn = document.getElementById('sched-url-input');
+      var cronSel = document.getElementById('sched-cron-select');
+      var customCronIn = document.getElementById('sched-custom-cron-input');
+      var modeSel = document.getElementById('sched-mode-select');
+      var diffChk = document.getElementById('sched-diff-checkbox');
+      var promptIn = document.getElementById('sched-prompt-input');
+      var statusEl = document.getElementById('sched-create-status');
+
+      var name = nameIn ? nameIn.value.trim() : '';
+      var targetUrl = urlIn ? urlIn.value.trim() : '';
+      var scheduleExpr =
+        customCronIn && customCronIn.value.trim()
+          ? customCronIn.value.trim()
+          : cronSel
+            ? cronSel.value
+            : '0 8 * * *';
+      var mode = modeSel ? modeSel.value : 'scrape';
+      var onlyOnChange = diffChk ? Boolean(diffChk.checked) : false;
+      var promptText = promptIn ? promptIn.value.trim() : '';
+
+      if (!name) {
+        if (statusEl) {
+          statusEl.innerHTML =
+            '<span class="status-dot red"></span><span>Please enter a task name.</span>';
+        }
+        return;
+      }
+      if (!promptText && !targetUrl) {
+        if (statusEl) {
+          statusEl.innerHTML =
+            '<span class="status-dot red"></span><span>Enter a Target URL or scraping instructions.</span>';
+        }
+        return;
+      }
+
+      fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          target_url: targetUrl,
+          schedule: scheduleExpr,
+          mode: mode,
+          only_on_change: onlyOnChange,
+          prompt:
+            promptText ||
+            'Extract the main content, key data points, and tables into clean Markdown.'
+        })
+      })
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || 'Failed to create schedule');
+            return d;
+          });
+        })
+        .then(function () {
+          if (nameIn) nameIn.value = '';
+          if (urlIn) urlIn.value = '';
+          if (customCronIn) customCronIn.value = '';
+          if (promptIn) promptIn.value = '';
+          if (statusEl) {
+            statusEl.innerHTML =
+              '<span class="status-dot green"></span><span>Scheduled! Saved to <code>/data/schedules.json</code></span>';
+          }
+          loadSchedulesList();
+        })
+        .catch(function (err) {
+          if (statusEl) {
+            statusEl.innerHTML =
+              '<span class="status-dot red"></span><span>' +
+              escapeHtml(err.message) +
+              '</span>';
+          }
+        });
+    });
+  }
+
+  document.addEventListener('click', function (ev) {
+    var runBtn = ev.target.closest('[data-sched-run]');
+    if (runBtn) {
+      var taskId = runBtn.getAttribute('data-sched-run');
+      if (!taskId) return;
+      runBtn.disabled = true;
+      var labelSpan = runBtn.querySelector('span:last-child');
+      if (labelSpan) labelSpan.textContent = 'Running...';
+      fetch('/api/schedules/' + encodeURIComponent(taskId) + '/run', {
+        method: 'POST'
+      })
+        .then(function () {
+          loadSchedulesList();
+          loadSessionsList();
+        })
+        .catch(function () {
+          loadSchedulesList();
+        });
+      return;
+    }
+
+    var openBtn = ev.target.closest('[data-sched-open]');
+    if (openBtn) {
+      var sessId = openBtn.getAttribute('data-sched-open');
+      var title = openBtn.getAttribute('data-sched-title') || 'Scheduled Task';
+      if (!sessId) return;
+      currentSessionId = sessId;
+      switchView('workbench');
+      var titleEl = document.getElementById('active-session-title');
+      if (titleEl) {
+        titleEl.innerHTML =
+          escapeHtml(title) + ' <span class="header-count">· Scheduled</span>';
+      }
+      loadRemoteSessionHistory(sessId);
+      return;
+    }
+
+    var toggleBtn = ev.target.closest('[data-sched-toggle]');
+    if (toggleBtn) {
+      var toggleId = toggleBtn.getAttribute('data-sched-toggle');
+      if (!toggleId) return;
+      fetch('/api/schedules/' + encodeURIComponent(toggleId) + '/toggle', {
+        method: 'POST'
+      }).then(function () {
+        loadSchedulesList();
+      });
+      return;
+    }
+
+    var delBtn = ev.target.closest('[data-sched-delete]');
+    if (delBtn) {
+      var delId = delBtn.getAttribute('data-sched-delete');
+      if (!delId) return;
+      fetch('/api/schedules/' + encodeURIComponent(delId), {
+        method: 'DELETE'
+      }).then(function () {
+        loadSchedulesList();
+      });
+    }
+  });
 })();

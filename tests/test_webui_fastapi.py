@@ -236,6 +236,39 @@ class TestWebUiAndAuthMiddleware(unittest.TestCase):
         tokens_css = (web_dir / "css" / "gm3-color-tokens.css").read_text(encoding="utf-8")
         self.assertIn("--md-sys-color-primary", tokens_css)
         self.assertIn("--md-sys-color-surface-container-low", tokens_css)
+        self.assertIn('id="view-schedules"', index_html)
+
+    def test_task_scheduler_cron_and_persistence(self) -> None:
+        import datetime
+        import tempfile
+        from src.core.scheduler import TaskScheduler, cron_matches_dt
+
+        dt_8am = datetime.datetime(2026, 10, 26, 8, 0)
+        self.assertTrue(cron_matches_dt("0 8 * * *", dt_8am))
+        self.assertFalse(cron_matches_dt("30 8 * * *", dt_8am))
+        self.assertTrue(cron_matches_dt("*/15 * * * *", dt_8am))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sched_file = Path(tmp) / "schedules.json"
+            scheduler = TaskScheduler(schedules_path=sched_file)
+            created = scheduler.create_or_update_task(
+                name="Daily Price Scrape",
+                target_url="https://example.com/pricing",
+                prompt="Extract prices into a Markdown table",
+                schedule="0 8 * * *",
+                only_on_change=True,
+            )
+            self.assertEqual(created["name"], "Daily Price Scrape")
+            self.assertTrue(sched_file.exists())
+
+            reloaded = TaskScheduler(schedules_path=sched_file)
+            tasks = reloaded.list_tasks()
+            self.assertEqual(len(tasks), 1)
+            self.assertEqual(tasks[0]["target_url"], "https://example.com/pricing")
+            reloaded.toggle_task(created["id"], enabled=False)
+            self.assertFalse(reloaded.get_task(created["id"])["enabled"])
+            self.assertTrue(reloaded.delete_task(created["id"]))
+            self.assertEqual(len(reloaded.list_tasks()), 0)
 
 
 if __name__ == "__main__":
