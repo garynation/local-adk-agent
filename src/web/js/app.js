@@ -859,7 +859,7 @@
       var userTurn = document.createElement('article');
       userTurn.className = 'chat-msg user';
       userTurn.innerHTML =
-        '<div class="chat-turn-header"><strong class="chat-msg-author">You (Web UI)</strong><span class="chat-msg-time">Just now</span></div><p style="margin:0;">' +
+        '<div class="chat-turn-header"><strong class="chat-msg-author">You (Web UI)</strong><span class="chat-msg-time">Just now</span></div><p style="margin:0; white-space:pre-wrap;">' +
         escapeHtml(promptText) +
         '</p>';
       chatStream.appendChild(userTurn);
