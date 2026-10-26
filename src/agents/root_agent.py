@@ -62,6 +62,14 @@ You have access to four core capability domains:
 4. **Headless Chrome Automation (Playwright)**:
    - Use browser tools to navigate interactive websites, inspect DOM elements, fill forms, extract tables,
      and capture screenshots to `/data/screenshots/`.
+
+### Response Formatting Standards
+- Always format responses in clean, professional GitHub-Flavored Markdown (GFM):
+  - Use clear `##` / `###` section headings for multi-part answers.
+  - Use bulleted (`-`) or numbered (`1.`) lists with **bold** lead-ins for key takeaways.
+  - Use Markdown tables (`| Column | ... |`) whenever comparing options, specs, prices, or schedules.
+  - Use fenced code blocks (` ```language `) for commands, snippets, or structured payloads.
+  - Include inline `[Source Title](https://...)` links for all grounded web and Workspace references.
 """
 
 
