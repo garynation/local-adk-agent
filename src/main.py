@@ -205,8 +205,22 @@ def _build_masked_config_status(cfg_mgr: Any, gchat_bridge: Any = None) -> dict[
             "gemini_configured": bool(api_key),
             "gemini_key_configured": bool(api_key),
             "gemini_key_masked": masked_key or "",
-            "default_model": _cfg_attr(cfg, "default_model", "gemini-2.5-pro"),
-            "fast_model": _cfg_attr(cfg, "fast_model", "gemini-2.5-flash"),
+            "default_model": _cfg_attr(cfg, "default_model", "gemini-4.0-pro"),
+            "fast_model": _cfg_attr(cfg, "fast_model", "gemini-4.0-flash"),
+            "available_models": [
+                "gemini-4.0-pro",
+                "gemini-4.0-flash",
+                "gemini-4.0-ultra",
+                "gemini-4-pro",
+                "gemini-4-flash",
+                "gemini-3.1-pro-preview",
+                "gemini-3.0-pro",
+                "gemini-3.0-flash",
+                "gemini-3-flash-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+            ],
             "temperature": float(_cfg_attr(cfg, "temperature", 0.2)),
             "max_research_iterations": int(_cfg_attr(cfg, "max_research_iterations", 3)),
             "workspace_oauth_configured": workspace_oauth_configured,
@@ -663,11 +677,39 @@ async def get_config_status(request: Request) -> dict[str, Any]:
 class GeminiKeyPayload(BaseModel):
     api_key: str = ""
     model: str | None = None
-    default_model: str = "gemini-2.5-pro"
-    fast_model: str = "gemini-2.5-flash"
+    default_model: str = "gemini-4.0-pro"
+    fast_model: str = "gemini-4.0-flash"
     temperature: float = 0.2
     max_research_iterations: int = 3
     skip_validation: bool = False
+
+
+class ModelUpdatePayload(BaseModel):
+    default_model: str = "gemini-4.0-pro"
+    fast_model: str | None = None
+
+
+@app.post("/api/config/model")
+async def update_default_model(payload: ModelUpdatePayload, request: Request) -> dict[str, Any]:
+    """Updates default_model (and optionally fast_model) in /data/config.json and hot-reloads ADK."""
+    cfg_mgr = _resolve_config_manager(request)
+    chosen = (payload.default_model or "gemini-4.0-pro").strip()
+    updates: dict[str, Any] = {"default_model": chosen}
+    if payload.fast_model:
+        updates["fast_model"] = payload.fast_model.strip()
+    elif chosen.startswith("gemini-4"):
+        updates["fast_model"] = "gemini-4.0-flash"
+    await _update_config_fields(cfg_mgr, **updates)
+    try:
+        runner_mgr = _resolve_runner_manager(request)
+        await _reload_runner_safely(runner_mgr)
+    except Exception as exc:
+        logger.warning("Runner hot-reload after model update: %s", exc)
+    return {
+        "status": "ok",
+        "default_model": chosen,
+        "config": _build_masked_config_status(cfg_mgr),
+    }
 
 
 @app.post("/api/config/gemini-key")

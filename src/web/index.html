@@ -221,6 +221,13 @@
       line-height: 1.45;
     }
 
+    /* Strict View Panel Exclusivity (Prevents display:grid / display:flex overriding [hidden]) */
+    [hidden],
+    .view-panel[hidden],
+    .view-panel:not(.active) {
+      display: none !important;
+    }
+
     /* Mode 2 Centered Max-Width for Settings & Onboarding Console */
     .settings-canvas {
       max-width: 1280px;
@@ -410,25 +417,14 @@
           <!-- Column 1: Shared SQLite Session Rail (0 Badges) -->
           <aside class="card">
             <div class="row-between" style="margin-bottom: 12px;">
-              <h2 class="card-title">Conversations <span id="session-count-label" class="header-count">· 3</span></h2>
+              <h2 class="card-title">Conversations <span id="session-count-label" class="header-count">· 0</span></h2>
               <button type="button" id="new-session-btn" class="btn-tonal">
                 <span class="material-symbols-outlined">add</span>
                 <span>New</span>
               </button>
             </div>
             <div id="session-list" class="session-list" data-scroll-fade>
-              <button type="button" class="session-item active" data-session-id="sess_mobile_gchat_01">
-                <span class="session-item-title">Tokyo flight itinerary &amp; hotel research</span>
-                <span class="session-item-meta">Google Chat · 2m ago</span>
-              </button>
-              <button type="button" class="session-item" data-session-id="sess_webui_02">
-                <span class="session-item-title">Home server UPS battery comparison</span>
-                <span class="session-item-meta">Deep Research · 1h ago</span>
-              </button>
-              <button type="button" class="session-item" data-session-id="sess_mobile_gchat_03">
-                <span class="session-item-title">Summarize unread invoices in Gmail</span>
-                <span class="session-item-meta">Google Chat · Yesterday</span>
-              </button>
+              <p id="session-empty-state" class="meta" style="margin: 8px 4px;">No conversations yet. Send a message or click + New to start.</p>
             </div>
           </aside>
 
@@ -436,14 +432,29 @@
           <section class="card" style="display: flex; flex-direction: column; gap: 16px;">
             <div class="row-between" style="flex-wrap: wrap; gap: 12px;">
               <div>
-                <h1 id="active-session-title" style="font-size: 18px; margin: 0;">Tokyo flight itinerary &amp; hotel research <span class="header-count">· Synced</span></h1>
-                <p id="active-session-subtitle" class="meta" style="margin: 2px 0 0;">Shared SQLite session · Started on mobile Google Chat</p>
+                <h1 id="active-session-title" style="font-size: 18px; margin: 0;">New conversation <span class="header-count">· Ready</span></h1>
+                <p id="active-session-subtitle" class="meta" style="margin: 2px 0 0;">Shared SQLite session · Web UI &amp; Google Chat</p>
               </div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <select id="model-select" class="m3-select" aria-label="Select Gemini model">
-                  <option value="gemini-2.5-pro" selected>gemini-2.5-pro</option>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                  <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                  <optgroup label="Gemini 4 Series">
+                    <option value="gemini-4.0-pro" selected>gemini-4.0-pro</option>
+                    <option value="gemini-4.0-flash">gemini-4.0-flash</option>
+                    <option value="gemini-4.0-ultra">gemini-4.0-ultra</option>
+                    <option value="gemini-4-pro">gemini-4-pro</option>
+                    <option value="gemini-4-flash">gemini-4-flash</option>
+                  </optgroup>
+                  <optgroup label="Gemini 3 Series">
+                    <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                    <option value="gemini-3.0-pro">gemini-3.0-pro</option>
+                    <option value="gemini-3.0-flash">gemini-3.0-flash</option>
+                    <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                  </optgroup>
+                  <optgroup label="Gemini 2.5 Series">
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                  </optgroup>
                 </select>
                 <div id="deep-research-toggle" class="m3-pill-tabs" role="tablist" aria-label="Execution mode">
                   <button type="button" class="m3-pill-tab active" role="tab" aria-selected="true" data-mode="standard">Standard</button>
@@ -454,122 +465,20 @@
 
             <!-- Single-Column Chronological Stream -->
             <div id="chat-stream" class="chat-stream" data-scroll-fade>
-              <article class="chat-msg user">
-                <div class="chat-turn-header">
-                  <strong class="chat-msg-author">You (via mobile Google Chat)</strong>
-                  <span class="chat-msg-time">4m ago</span>
+              <div id="chat-empty-state" class="card-nested" style="background: var(--md-sys-color-surface-container);">
+                <div class="row-between">
+                  <h4>Ready for Chat &amp; Deep Research</h4>
+                  <span class="chat-turn-badge">Clean workspace</span>
                 </div>
-                <p style="margin: 0;">Check my Gmail for the ANA flight confirmation next month, verify current JR Pass pricing via Google Search and Headless Chrome, and draft a summary note to my travel partner.</p>
-              </article>
-
-              <article class="chat-msg assistant">
-                <div class="chat-turn-header">
-                  <div class="chat-turn-identity">
-                    <span class="material-symbols-outlined">auto_awesome</span>
-                    <strong class="chat-msg-author">ADK Personal Agent</strong>
-                    <span class="chat-turn-badge">Verified · Grounded</span>
-                  </div>
-                  <span class="chat-msg-time">gemini-2.5-pro · 2m ago</span>
-                </div>
-
-                <!-- Expandable Tool Call 1: Personal Gmail Search -->
-                <div class="step-trace-box">
-                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
-                    <span class="row-inline">
-                      <span class="material-symbols-outlined">mail</span>
-                      <span>Workspace tool: <strong>gmail_search_messages</strong></span>
-                    </span>
-                    <span class="row-inline">
-                      <span class="status-dot-inline"><span class="status-dot green"></span>200 OK · 164 ms</span>
-                      <span class="material-symbols-outlined">expand_more</span>
-                    </span>
-                  </button>
-                  <pre class="step-trace-body" hidden>{
-  "query": "from:ana.co.jp subject:(Confirmation OR e-Ticket) newer_than:60d",
-  "matched_threads": 1,
-  "flight": "NH 212 (LHR -> HND) · Departs Nov 14, 19:00"
-}</pre>
-                </div>
-
-                <!-- Expandable Tool Call 2: Google Search Grounding Sub-Agent -->
-                <div class="step-trace-box">
-                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
-                    <span class="row-inline">
-                      <span class="material-symbols-outlined">travel_explore</span>
-                      <span>Search grounding: <strong>google_search_agent</strong></span>
-                    </span>
-                    <span class="row-inline">
-                      <span class="status-dot-inline"><span class="status-dot green"></span>Grounded · 390 ms</span>
-                      <span class="material-symbols-outlined">expand_more</span>
-                    </span>
-                  </button>
-                  <pre class="step-trace-body" hidden>{
-  "web_search_queries": ["JR Pass 7 day ordinary price 2026 official", "Tokaido Shinkansen Nozomi supplement"],
-  "grounding_chunks": ["https://japanrailpass.net/en/about_jrp/price/"]
-}</pre>
-                </div>
-
-                <!-- Expandable Tool Call 3: Headless Chrome Live Capture -->
-                <div class="step-trace-box">
-                  <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">
-                    <span class="row-inline">
-                      <span class="material-symbols-outlined">web</span>
-                      <span>Headless Chrome: <strong>browse_webpage</strong></span>
-                    </span>
-                    <span class="row-inline">
-                      <span class="status-dot-inline"><span class="status-dot green"></span>Screenshot ready · 920 ms</span>
-                      <span class="material-symbols-outlined">expand_more</span>
-                    </span>
-                  </button>
-                  <div class="step-trace-body" hidden>
-                    <div>Navigated to <code>https://japanrailpass.net/en/</code> (Chromium headless profile <code>/data/chrome-profile</code>)</div>
-                  </div>
-                </div>
-
-                <!-- Grounded Prose with Interactive Source Pills -->
-                <p style="margin: 0;">
-                  I found your ANA e-ticket confirmation in Gmail <button type="button" class="chat-cite-pill" data-cite-id="cite-gmail-1">[1] Gmail: ANA Booking #NH212</button> arriving at Haneda on <strong>Nov 15 at 15:45 JST</strong>. Using Google Search grounding and Headless Chrome <button type="button" class="chat-cite-pill" data-cite-id="cite-web-1">[2] JR Pass Official Fare Table</button>, the 7-day Ordinary JR Pass is <strong>¥50,000</strong>, which exceeds individual round-trip Tokyo–Kyoto Shinkansen tickets (¥28,340).
-                </p>
-
-                <!-- Single-Column Result Summary Inset (Staged Gmail Draft) -->
-                <div class="card-nested">
-                  <div class="row-between">
-                    <h4>Staged Gmail draft: Tokyo Arrival &amp; Shinkansen Plan</h4>
-                    <span class="chat-turn-badge model-badge">Draft staged</span>
-                  </div>
-                  <p class="meta" style="margin: 0;">Saved to Gmail Drafts (Safety Gate: Draft-Only mode active). Includes NH 212 arrival details and SmartEX ticket recommendation.</p>
-                </div>
-
-                <!-- Per-Turn Inline Chat Actions -->
-                <div class="chat-inline-actions">
-                  <div class="chat-action-group">
-                    <button type="button" class="chat-action-btn primary-tonal" data-chat-action="send-draft">
-                      <span class="material-symbols-outlined">send</span>
-                      <span>Approve &amp; send draft</span>
-                    </button>
-                    <button type="button" class="chat-action-btn" data-chat-action="cite" data-cite-id="cite-web-1">
-                      <span class="material-symbols-outlined">fact_check</span>
-                      <span>Inspect sources</span>
-                    </button>
-                  </div>
-                  <div class="chat-action-group">
-                    <button type="button" class="chat-action-btn" data-chat-action="feedback-up" aria-label="Helpful response">
-                      <span class="material-symbols-outlined">thumb_up</span>
-                    </button>
-                    <button type="button" class="chat-action-btn" data-chat-action="copy" aria-label="Copy response">
-                      <span class="material-symbols-outlined">content_copy</span>
-                      <span>Copy</span>
-                    </button>
-                  </div>
-                </div>
-              </article>
+                <p class="meta" style="margin: 0;">Send a prompt below to start a new conversation, query your connected Google Workspace (Gmail, Calendar, Drive, Docs), or run multi-step Deep Research.</p>
+              </div>
             </div>
 
             <!-- Follow-Up Suggestion Chips -->
             <div class="prompt-suggestion-row">
-              <button type="button" class="prompt-suggestion-chip">Add Flight NH 212 to my Google Calendar</button>
-              <button type="button" class="prompt-suggestion-chip">Run Deep Research on boutique hotels in Kyoto</button>
-              <button type="button" class="prompt-suggestion-chip">Create a Google Doc itinerary from this thread</button>
+              <button type="button" class="prompt-suggestion-chip">Summarize my unread emails from today</button>
+              <button type="button" class="prompt-suggestion-chip">Check my Google Calendar schedule for tomorrow</button>
+              <button type="button" class="prompt-suggestion-chip">Run Deep Research with Google Search &amp; Headless Chrome</button>
             </div>
 
             <!-- Google Chat Borderless Tonal Pill Composer -->
@@ -588,24 +497,10 @@
 
           <!-- Column 3: Grounded Sources & Headless Chrome Inspector Rail -->
           <aside class="card context-pane" data-scroll-fade style="display: flex; flex-direction: column; gap: 12px;">
-            <h2 class="card-title">Grounded sources <span id="sources-count-label" class="header-count">· 2</span></h2>
+            <h2 class="card-title">Grounded sources <span id="sources-count-label" class="header-count">· 0</span></h2>
 
             <div id="grounding-sources-list" style="display: flex; flex-direction: column; gap: 10px;">
-              <div id="cite-gmail-1" class="card-nested" style="background: var(--md-sys-color-surface-container);">
-                <div class="row-between">
-                  <strong>ANA e-Ticket #NH212</strong>
-                  <span class="chat-turn-badge">Gmail Thread</span>
-                </div>
-                <p class="meta" style="margin: 0;">From: reservation@ana.co.jp · LHR to HND · Nov 14</p>
-              </div>
-
-              <div id="cite-web-1" class="card-nested" style="background: var(--md-sys-color-surface-container);">
-                <div class="row-between">
-                  <strong>JR Pass Fare Table 2026</strong>
-                  <span class="chat-turn-badge">Web Grounded</span>
-                </div>
-                <p class="meta" style="margin: 0;">japanrailpass.net · Verified via Google Search &amp; Playwright</p>
-              </div>
+              <p id="sources-empty-state" class="meta" style="margin: 0;">Grounding citations and Workspace references from the active conversation will appear here.</p>
             </div>
 
             <div id="browser-inspector-card" class="card-nested" style="background: var(--md-sys-color-surface-container); margin-top: 4px;">
@@ -656,9 +551,28 @@
 
               <label class="meta" for="default-model-select">Default ADK runner model</label>
               <select id="default-model-select" class="m3-select">
-                <option value="gemini-2.5-pro" selected>gemini-2.5-pro (Reasoning &amp; Deep Research)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast Assistant)</option>
+                <optgroup label="Gemini 4 Series">
+                  <option value="gemini-4.0-pro" selected>gemini-4.0-pro (Reasoning &amp; Deep Research)</option>
+                  <option value="gemini-4.0-flash">gemini-4.0-flash (Fast Multimodal Assistant)</option>
+                  <option value="gemini-4.0-ultra">gemini-4.0-ultra (Maximum Capability)</option>
+                  <option value="gemini-4-pro">gemini-4-pro (Alias)</option>
+                  <option value="gemini-4-flash">gemini-4-flash (Alias)</option>
+                </optgroup>
+                <optgroup label="Gemini 3 Series">
+                  <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                  <option value="gemini-3.0-pro">gemini-3.0-pro</option>
+                  <option value="gemini-3.0-flash">gemini-3.0-flash</option>
+                  <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                </optgroup>
+                <optgroup label="Gemini 2.5 Series">
+                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                </optgroup>
               </select>
+
+              <label class="meta" for="custom-model-input">Custom model ID override (optional, e.g. <code>gemini-4.0-pro-exp</code>)</label>
+              <input type="text" id="custom-model-input" class="m3-input-field" placeholder="Leave blank to use dropdown selection above" />
 
               <div class="row-between" style="margin-top: 4px; flex-wrap: wrap;">
                 <span id="gemini-test-status" class="status-dot-inline">

@@ -220,11 +220,18 @@ class TestWebUiAndAuthMiddleware(unittest.TestCase):
     def test_web_ui_gm3_static_files_and_views(self) -> None:
         web_dir = Path(__file__).resolve().parent.parent / "src" / "web"
         index_html = (web_dir / "index.html").read_text(encoding="utf-8")
+        app_js = (web_dir / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="view-workbench"', index_html)
         self.assertIn('id="view-settings"', index_html)
         self.assertIn('id="theme-toggle-btn"', index_html)
         self.assertIn("brightness_auto", index_html)
         self.assertIn("/static/css/gm3-color-tokens.css", index_html)
+        self.assertIn(".view-panel:not(.active)", index_html)
+        self.assertIn("gemini-4.0-pro", index_html)
+        self.assertIn("gemini-4.0-flash", index_html)
+        self.assertNotIn("Tokyo flight itinerary", index_html)
+        self.assertNotIn("Tokyo flight itinerary", app_js)
+        self.assertNotIn("SEED_CONVERSATIONS", app_js)
 
         tokens_css = (web_dir / "css" / "gm3-color-tokens.css").read_text(encoding="utf-8")
         self.assertIn("--md-sys-color-primary", tokens_css)

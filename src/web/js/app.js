@@ -127,29 +127,42 @@
     if (viewWorkbench && viewSettings) {
       if (normalized === 'settings') {
         viewWorkbench.hidden = true;
+        viewWorkbench.setAttribute('hidden', '');
         viewWorkbench.classList.remove('active');
+        viewWorkbench.style.display = 'none';
         viewSettings.hidden = false;
+        viewSettings.removeAttribute('hidden');
         viewSettings.classList.add('active');
+        viewSettings.style.display = '';
       } else {
         viewSettings.hidden = true;
+        viewSettings.setAttribute('hidden', '');
         viewSettings.classList.remove('active');
+        viewSettings.style.display = 'none';
         viewWorkbench.hidden = false;
+        viewWorkbench.removeAttribute('hidden');
         viewWorkbench.classList.add('active');
+        viewWorkbench.style.display = '';
         scrollChatToBottom();
       }
     }
     navItems.forEach(function (btn) {
       var isMatch = btn.getAttribute('data-view') === normalized;
       btn.classList.toggle('active', isMatch);
+      btn.setAttribute('aria-current', isMatch ? 'page' : 'false');
     });
     closeMobileDrawer();
     refreshAllScrollFades();
   }
 
   navItems.forEach(function (btn) {
-    btn.addEventListener('click', function () {
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
       var target = btn.getAttribute('data-view') || 'workbench';
       switchView(target);
+      if (history.replaceState) {
+        history.replaceState(null, '', '#' + target);
+      }
     });
   });
 
@@ -159,7 +172,7 @@
     var queryView = (params.get('view') || params.get('settings') || '').toLowerCase();
     if (hash === 'settings' || queryView === 'settings' || queryView === 'workspace') {
       switchView('settings');
-    } else if (hash === 'workbench') {
+    } else {
       switchView('workbench');
     }
   }
@@ -229,59 +242,78 @@
   window.addEventListener('resize', refreshAllScrollFades);
 
   // ---------------------------------------------------------------------------
-  // 5. Interactive Session Switching, Trace Accordions & Morphing Tabs
+  // 5. Interactive Session Switching (Clean State, Zero Demo Seeds)
   // ---------------------------------------------------------------------------
-  var currentSessionId = 'sess_mobile_gchat_01';
+  var currentSessionId = 'sess_' + Math.random().toString(36).slice(2, 10);
   var currentMode = 'standard';
 
-  var SEED_CONVERSATIONS = {
-    sess_mobile_gchat_01: {
-      title: 'Tokyo flight itinerary & hotel research',
-      subtitle: 'Shared SQLite session · Started on mobile Google Chat',
-      html: chatStream ? chatStream.innerHTML : ''
-    },
-    sess_webui_02: {
-      title: 'Home server UPS battery comparison',
-      subtitle: 'Deep Research session · 4 web sources synthesized',
-      html: [
-        '<article class="chat-msg user">',
-        '  <div class="chat-turn-header"><strong class="chat-msg-author">You (Web UI)</strong><span class="chat-msg-time">1h ago</span></div>',
-        '  <p style="margin:0;">Compare pure sine-wave 1500VA UPS units for my Linux container host with USB NUT support and LiFePO4 battery longevity.</p>',
-        '</article>',
-        '<article class="chat-msg assistant">',
-        '  <div class="chat-turn-header">',
-        '    <div class="chat-turn-identity"><span class="material-symbols-outlined">auto_awesome</span><strong class="chat-msg-author">ADK Deep Research</strong><span class="chat-turn-badge">Verified · Grounded</span></div>',
-        '    <span class="chat-msg-time">gemini-2.5-pro · 1h ago</span>',
-        '  </div>',
-        '  <div class="step-trace-box">',
-        '    <button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true">',
-        '      <span class="row-inline"><span class="material-symbols-outlined">travel_explore</span><span>Deep Research Loop: <strong>deep_research_workflow</strong></span></span>',
-        '      <span class="row-inline"><span class="status-dot-inline"><span class="status-dot green"></span>Completed · 3 iterations</span><span class="material-symbols-outlined">expand_more</span></span>',
-        '    </button>',
-        '    <pre class="step-trace-body" hidden>{"iterations": 3, "tools": ["google_search_agent", "browse_webpage"], "nut_driver": "usbhid-ups"}</pre>',
-        '  </div>',
-        '  <p style="margin:0;">For a 24/7 Linux server running Docker and Network UPS Tools (<code>usbhid-ups</code>), LiFePO4 rack/tower units offer 2,000–3,000 charge cycles (8–10 years) compared to 3–4 years for sealed lead-acid batteries.</p>',
-        '</article>'
-      ].join('\n')
-    },
-    sess_mobile_gchat_03: {
-      title: 'Summarize unread invoices in Gmail',
-      subtitle: 'Shared SQLite session · Started on mobile Google Chat',
-      html: [
-        '<article class="chat-msg user">',
-        '  <div class="chat-turn-header"><strong class="chat-msg-author">You (via mobile Google Chat)</strong><span class="chat-msg-time">Yesterday</span></div>',
-        '  <p style="margin:0;">Search my Gmail for unread cloud and domain renewal invoices from the last 14 days.</p>',
-        '</article>',
-        '<article class="chat-msg assistant">',
-        '  <div class="chat-turn-header">',
-        '    <div class="chat-turn-identity"><span class="material-symbols-outlined">auto_awesome</span><strong class="chat-msg-author">ADK Personal Agent</strong><span class="chat-turn-badge">Verified · Grounded</span></div>',
-        '    <span class="chat-msg-time">gemini-2.5-flash · Yesterday</span>',
-        '  </div>',
-        '  <p style="margin:0;">I found 2 unread billing notices in your personal Workspace inbox: Cloudflare Domain Renewal ($10.44) and Google Workspace Business Starter ($7.20).</p>',
-        '</article>'
-      ].join('\n')
-    }
-  };
+  function renderEmptyChatState() {
+    if (!chatStream) return;
+    chatStream.innerHTML = [
+      '<div id="chat-empty-state" class="card-nested" style="background: var(--md-sys-color-surface-container);">',
+      '  <div class="row-between">',
+      '    <h4>Ready for Chat &amp; Deep Research</h4>',
+      '    <span class="chat-turn-badge">Clean workspace</span>',
+      '  </div>',
+      '  <p class="meta" style="margin: 0;">Send a prompt below to start a new conversation, query your connected Google Workspace (Gmail, Calendar, Drive, Docs), or run multi-step Deep Research.</p>',
+      '</div>'
+    ].join('');
+    updateScrollFade(chatStream);
+  }
+
+  function loadSessionsList() {
+    var sessionListEl = document.getElementById('session-list');
+    var countLabel = document.getElementById('session-count-label');
+    if (!sessionListEl) return;
+
+    fetch('/api/sessions')
+      .then(function (r) {
+        return r.ok ? r.json() : { sessions: [] };
+      })
+      .then(function (data) {
+        var list = (data && Array.isArray(data.sessions)) ? data.sessions : [];
+        if (countLabel) {
+          countLabel.textContent = '· ' + list.length;
+        }
+        if (list.length === 0) {
+          sessionListEl.innerHTML =
+            '<p id="session-empty-state" class="meta" style="margin: 8px 4px;">No conversations yet. Send a message or click + New to start.</p>';
+          return;
+        }
+        sessionListEl.innerHTML = list
+          .map(function (s) {
+            var sid = s.id || s.session_id || '';
+            var title = s.title || sid || 'Conversation';
+            var channel = s.origin_channel === 'gchat' ? 'Google Chat' : 'Web UI';
+            var isActive = sid === currentSessionId;
+            return (
+              '<div class="row-between" style="gap: 4px;">' +
+              '  <button type="button" class="session-item' +
+              (isActive ? ' active' : '') +
+              '" data-session-id="' +
+              escapeHtml(sid) +
+              '" style="flex: 1;">' +
+              '    <span class="session-item-title">' +
+              escapeHtml(title) +
+              '</span>' +
+              '    <span class="session-item-meta">' +
+              escapeHtml(channel) +
+              '</span>' +
+              '  </button>' +
+              '  <button type="button" class="icon-btn" data-delete-session="' +
+              escapeHtml(sid) +
+              '" title="Delete conversation" aria-label="Delete conversation" style="width: 32px; height: 32px;">' +
+              '    <span class="material-symbols-outlined" style="font-size: 16px;">close</span>' +
+              '  </button>' +
+              '</div>'
+            );
+          })
+          .join('');
+        bindSessionItems();
+        updateScrollFade(sessionListEl);
+      })
+      .catch(function () {});
+  }
 
   function bindSessionItems() {
     var sessionButtons = document.querySelectorAll('.session-item[data-session-id]');
@@ -293,29 +325,34 @@
         Array.prototype.forEach.call(sessionButtons, function (b) {
           b.classList.toggle('active', b === btn);
         });
-        var titleEl = document.getElementById('active-session-title');
-        var subEl = document.getElementById('active-session-subtitle');
-        if (SEED_CONVERSATIONS[sessId]) {
-          if (titleEl) {
-            titleEl.innerHTML =
-              SEED_CONVERSATIONS[sessId].title +
-              ' <span class="header-count">· Synced</span>';
-          }
-          if (subEl) {
-            subEl.textContent = SEED_CONVERSATIONS[sessId].subtitle;
-          }
-          if (chatStream) {
-            chatStream.innerHTML = SEED_CONVERSATIONS[sessId].html;
-            scrollChatToBottom();
-          }
-        } else {
-          loadRemoteSessionHistory(sessId);
-        }
+        loadRemoteSessionHistory(sessId);
+      };
+    });
+
+    var deleteButtons = document.querySelectorAll('[data-delete-session]');
+    Array.prototype.forEach.call(deleteButtons, function (delBtn) {
+      delBtn.onclick = function (ev) {
+        ev.stopPropagation();
+        var sessId = delBtn.getAttribute('data-delete-session');
+        if (!sessId) return;
+        fetch('/api/sessions/' + encodeURIComponent(sessId), { method: 'DELETE' })
+          .then(function () {
+            if (currentSessionId === sessId) {
+              currentSessionId = 'sess_' + Math.random().toString(36).slice(2, 10);
+              renderEmptyChatState();
+              var titleEl = document.getElementById('active-session-title');
+              if (titleEl) {
+                titleEl.innerHTML = 'New conversation <span class="header-count">· Ready</span>';
+              }
+            }
+            loadSessionsList();
+          })
+          .catch(function () {});
       };
     });
   }
 
-  bindSessionItems();
+  loadSessionsList();
 
   var newSessionBtn = document.getElementById('new-session-btn');
   if (newSessionBtn) {
@@ -329,10 +366,13 @@
       if (subEl) {
         subEl.textContent = 'Shared SQLite session · Web UI & Google Chat';
       }
-      if (chatStream) {
-        chatStream.innerHTML = '';
-        updateScrollFade(chatStream);
-      }
+      renderEmptyChatState();
+      Array.prototype.forEach.call(
+        document.querySelectorAll('.session-item.active'),
+        function (b) {
+          b.classList.remove('active');
+        }
+      );
       var chatInput = document.getElementById('chat-input');
       if (chatInput) chatInput.focus();
     });
@@ -501,6 +541,11 @@
       if (!promptText) return;
       chatInput.value = '';
 
+      var emptyPlaceholder = document.getElementById('chat-empty-state');
+      if (emptyPlaceholder && emptyPlaceholder.parentNode) {
+        emptyPlaceholder.parentNode.removeChild(emptyPlaceholder);
+      }
+
       var userTurn = document.createElement('article');
       userTurn.className = 'chat-msg user';
       userTurn.innerHTML =
@@ -510,7 +555,7 @@
       chatStream.appendChild(userTurn);
 
       var modelSelect = document.getElementById('model-select');
-      var selectedModel = modelSelect ? modelSelect.value : 'gemini-2.5-pro';
+      var selectedModel = modelSelect ? modelSelect.value : 'gemini-4.0-pro';
       var isDeepResearch = currentMode === 'deep_research';
 
       var assistantTurn = document.createElement('article');
@@ -560,6 +605,7 @@
             return reader.read().then(function (result) {
               if (result.done) {
                 scrollChatToBottom();
+                loadSessionsList();
                 return;
               }
               buffer += decoder.decode(result.value, { stream: true });
@@ -613,8 +659,71 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Live Configuration Status Sync & Button Handlers
+  // 7. Live Configuration Status Sync, Model Selector Sync & Button Handlers
   // ---------------------------------------------------------------------------
+  function ensureModelOption(selectEl, modelId) {
+    if (!selectEl || !modelId) return;
+    var clean = String(modelId).replace(/^models\//, '').trim();
+    if (!clean) return;
+    var exists = Array.prototype.some.call(selectEl.options, function (opt) {
+      return opt.value === clean;
+    });
+    if (!exists) {
+      var opt = document.createElement('option');
+      opt.value = clean;
+      opt.textContent = clean;
+      selectEl.appendChild(opt);
+    }
+  }
+
+  function syncModelSelects(activeModel, discoveredModels) {
+    var chatModelSel = document.getElementById('model-select');
+    var defaultModelSel = document.getElementById('default-model-select');
+    if (Array.isArray(discoveredModels)) {
+      discoveredModels.forEach(function (m) {
+        ensureModelOption(chatModelSel, m);
+        ensureModelOption(defaultModelSel, m);
+      });
+    }
+    if (activeModel) {
+      ensureModelOption(chatModelSel, activeModel);
+      ensureModelOption(defaultModelSel, activeModel);
+      if (chatModelSel) chatModelSel.value = activeModel;
+      if (defaultModelSel) defaultModelSel.value = activeModel;
+    }
+  }
+
+  var chatModelSelect = document.getElementById('model-select');
+  var defaultModelSelect = document.getElementById('default-model-select');
+  if (chatModelSelect) {
+    chatModelSelect.addEventListener('change', function () {
+      var chosen = chatModelSelect.value;
+      if (defaultModelSelect) {
+        ensureModelOption(defaultModelSelect, chosen);
+        defaultModelSelect.value = chosen;
+      }
+      fetch('/api/config/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_model: chosen })
+      }).catch(function () {});
+    });
+  }
+  if (defaultModelSelect) {
+    defaultModelSelect.addEventListener('change', function () {
+      var chosen = defaultModelSelect.value;
+      if (chatModelSelect) {
+        ensureModelOption(chatModelSelect, chosen);
+        chatModelSelect.value = chosen;
+      }
+      fetch('/api/config/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_model: chosen })
+      }).catch(function () {});
+    });
+  }
+
   function syncConfigStatus() {
     fetch('/api/config/status')
       .then(function (r) {
@@ -631,6 +740,9 @@
         var keyInput = document.getElementById('gemini-key-input');
         if (keyInput && cfg.gemini_key_masked) {
           keyInput.placeholder = cfg.gemini_key_masked;
+        }
+        if (cfg.default_model) {
+          syncModelSelects(cfg.default_model, cfg.available_models || []);
         }
         var wsBadge = document.getElementById('workspace-status-badge');
         if (wsBadge) {
@@ -657,10 +769,31 @@
     saveGeminiBtn.addEventListener('click', function () {
       var keyInput = document.getElementById('gemini-key-input');
       var modelSel = document.getElementById('default-model-select');
+      var customModelInput = document.getElementById('custom-model-input');
       var statusSpan = document.getElementById('gemini-test-status');
       var apiKey = keyInput ? keyInput.value.trim() : '';
+      var customModel = customModelInput ? customModelInput.value.trim() : '';
+      var chosenModel = customModel || (modelSel ? modelSel.value : 'gemini-4.0-pro');
       var hasMaskedKey = keyInput && keyInput.placeholder && keyInput.placeholder.indexOf('*') !== -1;
-      if (!apiKey && !hasMaskedKey) return;
+      if (!apiKey && !hasMaskedKey) {
+        // Still allow saving the default model even before an API key is entered
+        fetch('/api/config/model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ default_model: chosenModel })
+        })
+          .then(function () {
+            syncModelSelects(chosenModel, []);
+            if (statusSpan) {
+              statusSpan.innerHTML =
+                '<span class="status-dot green"></span><span>Saved default model: ' +
+                escapeHtml(chosenModel) +
+                '</span>';
+            }
+          })
+          .catch(function () {});
+        return;
+      }
       if (statusSpan) {
         statusSpan.innerHTML =
           '<span class="status-dot blue"></span><span>Verifying with AI Studio...</span>';
@@ -670,7 +803,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           api_key: apiKey,
-          default_model: modelSel ? modelSel.value : 'gemini-2.5-pro'
+          default_model: chosenModel
         })
       })
         .then(function (r) {
@@ -680,9 +813,12 @@
           });
         })
         .then(function (res) {
+          syncModelSelects(chosenModel, res.models_sample || []);
           if (statusSpan) {
             statusSpan.innerHTML =
               '<span class="status-dot green"></span><span>Verified · ' +
+              escapeHtml(chosenModel) +
+              ' · ' +
               (res.latency_ms || 0) +
               ' ms</span>';
           }

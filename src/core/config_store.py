@@ -198,8 +198,8 @@ class RuntimeConfig(BaseModel):
     gemini_api_key_encrypted: Optional[str] = None
     gemini_api_key: str = Field(default="", exclude=True)
     google_genai_use_vertexai: bool = False
-    default_model: str = "gemini-2.5-pro"
-    fast_model: str = "gemini-2.5-flash"
+    default_model: str = "gemini-4.0-pro"
+    fast_model: str = "gemini-4.0-flash"
     temperature: float = 0.2
     deep_research_engine: str = Field(
         default="hybrid",
