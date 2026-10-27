@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 from email.message import EmailMessage
+import re
 from typing import Any, Callable, Optional
 
 try:
@@ -456,35 +457,609 @@ def docs_read_document(
     }
 
 
+_INLINE_MD_PATTERN = re.compile(
+    r"(?P<code>`[^`\n]+`)"
+    r"|(?P<link>\[(?P<link_text>[^\]]+)\]\((?P<link_url>https?://[^\s)]+)\))"
+    r"|(?P<bold_italic>\*\*\*(?P<bi_a>.+?)\*\*\*|___(?P<bi_b>.+?)___)"
+    r"|(?P<bold>\*\*(?P<b_a>.+?)\*\*|__(?P<b_b>.+?)__)"
+    r"|(?P<strike>~~(?P<s_a>.+?)~~)"
+    r"|(?P<italic>(?<!\*)\*(?P<i_a>[^*\n]+)\*(?!\*)|(?<!_)_(?P<i_b>[^_\n]+)_(?!_))"
+)
+
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+_UL_RE = re.compile(r"^([ \t]*)[-*+]\s+(?:\[( |x|X)\]\s+)?(.*)$")
+_OL_RE = re.compile(r"^([ \t]*)\d+[.)]\s+(.*)$")
+_HR_RE = re.compile(r"^\s*(?:[-*_]\s*){3,}\s*$")
+_TABLE_SEP_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*:?-{2,}:?\s*\|?\s*$")
+
+
+def _utf16_len(text: str) -> int:
+    """Returns string length in UTF-16 code units as required by Google Docs API indices."""
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _rgb(r: float, g: float, b: float) -> dict[str, Any]:
+    return {"color": {"rgbColor": {"red": r, "green": g, "blue": b}}}
+
+
+def _parse_inline_markdown(
+    text: str, base_offset: int
+) -> tuple[str, list[tuple[int, int, dict[str, Any]]]]:
+    """Strips inline Markdown syntax and returns (clean_text, [(start, end, style_dict), ...])."""
+    out_parts: list[str] = []
+    spans: list[tuple[int, int, dict[str, Any]]] = []
+    cursor = 0
+    current_offset = base_offset
+
+    for match in _INLINE_MD_PATTERN.finditer(text):
+        start, end = match.span()
+        if start > cursor:
+            literal = text[cursor:start]
+            out_parts.append(literal)
+            current_offset += _utf16_len(literal)
+
+        if match.group("code"):
+            inner_code = match.group("code")[1:-1]
+            code_len = _utf16_len(inner_code)
+            out_parts.append(inner_code)
+            if code_len > 0:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + code_len,
+                        {"code": True},
+                    )
+                )
+            current_offset += code_len
+        elif match.group("link"):
+            raw_label = match.group("link_text") or ""
+            url = (match.group("link_url") or "").strip()
+            clean_label, nested_spans = _parse_inline_markdown(raw_label, current_offset)
+            label_len = _utf16_len(clean_label)
+            out_parts.append(clean_label)
+            if label_len > 0 and url:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + label_len,
+                        {"link": url},
+                    )
+                )
+            spans.extend(nested_spans)
+            current_offset += label_len
+        elif match.group("bold_italic"):
+            raw_inner = match.group("bi_a") or match.group("bi_b") or ""
+            clean_inner, nested_spans = _parse_inline_markdown(raw_inner, current_offset)
+            inner_len = _utf16_len(clean_inner)
+            out_parts.append(clean_inner)
+            if inner_len > 0:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + inner_len,
+                        {"bold": True, "italic": True},
+                    )
+                )
+            spans.extend(nested_spans)
+            current_offset += inner_len
+        elif match.group("bold"):
+            raw_inner = match.group("b_a") or match.group("b_b") or ""
+            clean_inner, nested_spans = _parse_inline_markdown(raw_inner, current_offset)
+            inner_len = _utf16_len(clean_inner)
+            out_parts.append(clean_inner)
+            if inner_len > 0:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + inner_len,
+                        {"bold": True},
+                    )
+                )
+            spans.extend(nested_spans)
+            current_offset += inner_len
+        elif match.group("strike"):
+            raw_inner = match.group("s_a") or ""
+            clean_inner, nested_spans = _parse_inline_markdown(raw_inner, current_offset)
+            inner_len = _utf16_len(clean_inner)
+            out_parts.append(clean_inner)
+            if inner_len > 0:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + inner_len,
+                        {"strikethrough": True},
+                    )
+                )
+            spans.extend(nested_spans)
+            current_offset += inner_len
+        elif match.group("italic"):
+            raw_inner = match.group("i_a") or match.group("i_b") or ""
+            clean_inner, nested_spans = _parse_inline_markdown(raw_inner, current_offset)
+            inner_len = _utf16_len(clean_inner)
+            out_parts.append(clean_inner)
+            if inner_len > 0:
+                spans.append(
+                    (
+                        current_offset,
+                        current_offset + inner_len,
+                        {"italic": True},
+                    )
+                )
+            spans.extend(nested_spans)
+            current_offset += inner_len
+
+        cursor = end
+
+    if cursor < len(text):
+        tail = text[cursor:]
+        out_parts.append(tail)
+
+    return "".join(out_parts), spans
+
+
+def _build_text_style_request(
+    start_idx: int, end_idx: int, style_flags: dict[str, Any]
+) -> Optional[dict[str, Any]]:
+    if end_idx <= start_idx:
+        return None
+    text_style: dict[str, Any] = {}
+    fields: list[str] = []
+
+    if style_flags.get("bold"):
+        text_style["bold"] = True
+        fields.append("bold")
+    if style_flags.get("italic"):
+        text_style["italic"] = True
+        fields.append("italic")
+    if style_flags.get("strikethrough"):
+        text_style["strikethrough"] = True
+        fields.append("strikethrough")
+    if style_flags.get("code"):
+        text_style["weightedFontFamily"] = {"fontFamily": "Roboto Mono"}
+        text_style["backgroundColor"] = _rgb(0.945, 0.953, 0.957)
+        fields.extend(["weightedFontFamily", "backgroundColor"])
+    if style_flags.get("font_family"):
+        text_style["weightedFontFamily"] = {"fontFamily": style_flags["font_family"]}
+        if "weightedFontFamily" not in fields:
+            fields.append("weightedFontFamily")
+    if style_flags.get("font_size_pt"):
+        text_style["fontSize"] = {
+            "magnitude": float(style_flags["font_size_pt"]),
+            "unit": "PT",
+        }
+        fields.append("fontSize")
+    if style_flags.get("fg_rgb"):
+        r, g, b = style_flags["fg_rgb"]
+        text_style["foregroundColor"] = _rgb(r, g, b)
+        fields.append("foregroundColor")
+    if style_flags.get("bg_rgb"):
+        r, g, b = style_flags["bg_rgb"]
+        text_style["backgroundColor"] = _rgb(r, g, b)
+        if "backgroundColor" not in fields:
+            fields.append("backgroundColor")
+    if style_flags.get("link"):
+        text_style["link"] = {"url": str(style_flags["link"])}
+        text_style["foregroundColor"] = _rgb(0.102, 0.451, 0.910)
+        text_style["underline"] = True
+        for f in ("link", "foregroundColor", "underline"):
+            if f not in fields:
+                fields.append(f)
+
+    if not fields:
+        return None
+
+    return {
+        "updateTextStyle": {
+            "range": {"startIndex": start_idx, "endIndex": end_idx},
+            "textStyle": text_style,
+            "fields": ",".join(fields),
+        }
+    }
+
+
+def markdown_to_docs_batch_requests(
+    markdown_text: str, start_index: int = 1
+) -> list[dict[str, Any]]:
+    """Compiles Markdown into native Google Docs batchUpdate requests.
+
+    Converts headings (#..######), bold/italic/strikethrough/inline-code, clickable
+    [Title](url) links, bulleted and numbered lists (including task checkboxes and
+    nested indentation), blockquotes, horizontal dividers, fenced code blocks, and
+    Markdown tables into native Google Docs paragraphs and styles without leaving
+    raw Markdown syntax in the document.
+    """
+    if not markdown_text or not markdown_text.strip():
+        return []
+
+    normalized = markdown_text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    raw_lines = normalized.split("\n")
+
+    clean_chunks: list[str] = []
+    paragraph_requests: list[dict[str, Any]] = []
+    text_style_requests: list[dict[str, Any]] = []
+    list_blocks: list[tuple[int, int, str]] = []
+
+    current_idx = start_index
+    in_code_block = False
+    code_lines_acc: list[str] = []
+    active_list_type: Optional[str] = None
+    active_list_start: int = 0
+    active_list_end: int = 0
+    table_row_index = 0
+
+    def _flush_active_list() -> None:
+        nonlocal active_list_type, active_list_start, active_list_end
+        if active_list_type and active_list_end > active_list_start:
+            preset = (
+                "BULLET_DISC_CIRCLE_SQUARE"
+                if active_list_type == "ul"
+                else "NUMBERED_DECIMAL_ALPHA_ROMAN"
+            )
+            list_blocks.append((active_list_start, active_list_end, preset))
+        active_list_type = None
+        active_list_start = 0
+        active_list_end = 0
+
+    def _append_paragraph(
+        raw_content: str,
+        *,
+        parse_inline: bool = True,
+        named_style: str = "NORMAL_TEXT",
+        extra_para_style: Optional[dict[str, Any]] = None,
+        extra_para_fields: Optional[list[str]] = None,
+        whole_text_style: Optional[dict[str, Any]] = None,
+        leading_tabs: int = 0,
+    ) -> tuple[int, int]:
+        nonlocal current_idx
+        prefix = "\t" * max(0, leading_tabs)
+        prefix_len = _utf16_len(prefix)
+        para_start = current_idx
+
+        if parse_inline:
+            clean_body, inline_spans = _parse_inline_markdown(
+                raw_content, para_start + prefix_len
+            )
+        else:
+            clean_body = raw_content
+            inline_spans = []
+
+        line_with_nl = f"{prefix}{clean_body}\n"
+        line_len = _utf16_len(line_with_nl)
+        para_end = para_start + line_len
+        content_end = para_end - 1  # Exclude trailing newline from text style spans
+
+        clean_chunks.append(line_with_nl)
+        current_idx = para_end
+
+        para_style: dict[str, Any] = {"namedStyleType": named_style}
+        para_fields: list[str] = ["namedStyleType"]
+        if extra_para_style:
+            para_style.update(extra_para_style)
+        if extra_para_fields:
+            for f in extra_para_fields:
+                if f not in para_fields:
+                    para_fields.append(f)
+
+        paragraph_requests.append(
+            {
+                "updateParagraphStyle": {
+                    "range": {"startIndex": para_start, "endIndex": para_end},
+                    "paragraphStyle": para_style,
+                    "fields": ",".join(para_fields),
+                }
+            }
+        )
+
+        if whole_text_style and content_end > para_start + prefix_len:
+            req = _build_text_style_request(
+                para_start + prefix_len, content_end, whole_text_style
+            )
+            if req:
+                text_style_requests.append(req)
+
+        for sp_start, sp_end, sp_flags in inline_spans:
+            req = _build_text_style_request(sp_start, sp_end, sp_flags)
+            if req:
+                text_style_requests.append(req)
+
+        return para_start, para_end
+
+    for line in raw_lines:
+        stripped = line.strip()
+
+        # 1. Fenced code blocks (```lang ... ```)
+        if stripped.startswith("```"):
+            _flush_active_list()
+            table_row_index = 0
+            if not in_code_block:
+                in_code_block = True
+                code_lines_acc = []
+            else:
+                in_code_block = False
+                if code_lines_acc:
+                    for code_line in code_lines_acc:
+                        _append_paragraph(
+                            code_line if code_line else " ",
+                            parse_inline=False,
+                            named_style="NORMAL_TEXT",
+                            extra_para_style={
+                                "indentStart": {"magnitude": 18, "unit": "PT"},
+                                "indentFirstLine": {"magnitude": 18, "unit": "PT"},
+                                "spaceAbove": {"magnitude": 2, "unit": "PT"},
+                                "spaceBelow": {"magnitude": 2, "unit": "PT"},
+                            },
+                            extra_para_fields=[
+                                "indentStart",
+                                "indentFirstLine",
+                                "spaceAbove",
+                                "spaceBelow",
+                            ],
+                            whole_text_style={
+                                "font_family": "Roboto Mono",
+                                "font_size_pt": 10.0,
+                                "bg_rgb": (0.945, 0.953, 0.957),
+                            },
+                        )
+                code_lines_acc = []
+            continue
+
+        if in_code_block:
+            code_lines_acc.append(line)
+            continue
+
+        # 2. Blank lines close active lists/tables; skip inserting empty spacer paragraphs
+        if not stripped:
+            _flush_active_list()
+            table_row_index = 0
+            continue
+
+        # 3. Horizontal rule (---, ***, ___)
+        if _HR_RE.match(line):
+            _flush_active_list()
+            table_row_index = 0
+            _append_paragraph(
+                " ",
+                parse_inline=False,
+                named_style="NORMAL_TEXT",
+                extra_para_style={
+                    "borderBottom": {
+                        "color": _rgb(0.85, 0.86, 0.88),
+                        "width": {"magnitude": 1, "unit": "PT"},
+                        "padding": {"magnitude": 4, "unit": "PT"},
+                        "dashStyle": "SOLID",
+                    },
+                    "spaceBelow": {"magnitude": 8, "unit": "PT"},
+                },
+                extra_para_fields=["borderBottom", "spaceBelow"],
+            )
+            continue
+
+        # 4. Headings (# H1 .. ###### H6)
+        heading_match = _HEADING_RE.match(stripped)
+        if heading_match:
+            _flush_active_list()
+            table_row_index = 0
+            level = min(len(heading_match.group(1)), 6)
+            heading_text = heading_match.group(2).strip()
+            _append_paragraph(
+                heading_text,
+                parse_inline=True,
+                named_style=f"HEADING_{level}",
+                extra_para_style={
+                    "spaceAbove": {"magnitude": 12 if level <= 2 else 8, "unit": "PT"},
+                    "spaceBelow": {"magnitude": 4, "unit": "PT"},
+                },
+                extra_para_fields=["spaceAbove", "spaceBelow"],
+            )
+            continue
+
+        # 5. Unordered bullet lists (-, *, +, including - [ ] / - [x])
+        ul_match = _UL_RE.match(line)
+        if ul_match:
+            table_row_index = 0
+            indent_raw = ul_match.group(1).expandtabs(2)
+            nest_level = min(len(indent_raw) // 2, 5)
+            checkbox = ul_match.group(2)
+            item_text = ul_match.group(3).strip()
+            if checkbox is not None:
+                marker = "☑ " if checkbox.lower() == "x" else "☐ "
+                item_text = f"{marker}{item_text}"
+
+            if active_list_type != "ul":
+                _flush_active_list()
+                active_list_type = "ul"
+                active_list_start = current_idx
+
+            _, p_end = _append_paragraph(
+                item_text,
+                parse_inline=True,
+                named_style="NORMAL_TEXT",
+                leading_tabs=nest_level,
+            )
+            active_list_end = p_end
+            continue
+
+        # 6. Ordered numbered lists (1. , 2. )
+        ol_match = _OL_RE.match(line)
+        if ol_match:
+            table_row_index = 0
+            indent_raw = ol_match.group(1).expandtabs(2)
+            nest_level = min(len(indent_raw) // 2, 5)
+            item_text = ol_match.group(2).strip()
+
+            if active_list_type != "ol":
+                _flush_active_list()
+                active_list_type = "ol"
+                active_list_start = current_idx
+
+            _, p_end = _append_paragraph(
+                item_text,
+                parse_inline=True,
+                named_style="NORMAL_TEXT",
+                leading_tabs=nest_level,
+            )
+            active_list_end = p_end
+            continue
+
+        # Non-list line closes any active list
+        _flush_active_list()
+
+        # 7. Markdown Tables (| Col 1 | Col 2 |)
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+            if _TABLE_SEP_RE.match(stripped):
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            row_text = "   |   ".join(cells)
+            is_header_row = table_row_index == 0
+            table_row_index += 1
+            _append_paragraph(
+                row_text,
+                parse_inline=True,
+                named_style="NORMAL_TEXT",
+                extra_para_style={
+                    "indentStart": {"magnitude": 8, "unit": "PT"},
+                    "indentFirstLine": {"magnitude": 8, "unit": "PT"},
+                    "spaceAbove": {"magnitude": 2, "unit": "PT"},
+                    "spaceBelow": {"magnitude": 2, "unit": "PT"},
+                    **(
+                        {
+                            "borderBottom": {
+                                "color": _rgb(0.75, 0.77, 0.80),
+                                "width": {"magnitude": 1, "unit": "PT"},
+                                "padding": {"magnitude": 2, "unit": "PT"},
+                                "dashStyle": "SOLID",
+                            }
+                        }
+                        if is_header_row
+                        else {}
+                    ),
+                },
+                extra_para_fields=[
+                    "indentStart",
+                    "indentFirstLine",
+                    "spaceAbove",
+                    "spaceBelow",
+                    *(["borderBottom"] if is_header_row else []),
+                ],
+                whole_text_style={"bold": True} if is_header_row else None,
+            )
+            continue
+
+        table_row_index = 0
+
+        # 8. Blockquotes (> quote)
+        if stripped.startswith(">"):
+            quote_text = re.sub(r"^(?:>\s*)+", "", stripped).strip()
+            _append_paragraph(
+                quote_text,
+                parse_inline=True,
+                named_style="NORMAL_TEXT",
+                extra_para_style={
+                    "indentStart": {"magnitude": 18, "unit": "PT"},
+                    "indentFirstLine": {"magnitude": 18, "unit": "PT"},
+                    "spaceAbove": {"magnitude": 4, "unit": "PT"},
+                    "spaceBelow": {"magnitude": 4, "unit": "PT"},
+                    "borderLeft": {
+                        "color": _rgb(0.102, 0.451, 0.910),
+                        "width": {"magnitude": 2.25, "unit": "PT"},
+                        "padding": {"magnitude": 8, "unit": "PT"},
+                        "dashStyle": "SOLID",
+                    },
+                },
+                extra_para_fields=[
+                    "indentStart",
+                    "indentFirstLine",
+                    "spaceAbove",
+                    "spaceBelow",
+                    "borderLeft",
+                ],
+                whole_text_style={"italic": True, "fg_rgb": (0.28, 0.30, 0.34)},
+            )
+            continue
+
+        # 9. Standard Body Paragraph
+        _append_paragraph(
+            stripped,
+            parse_inline=True,
+            named_style="NORMAL_TEXT",
+            extra_para_style={
+                "spaceAbove": {"magnitude": 0, "unit": "PT"},
+                "spaceBelow": {"magnitude": 6, "unit": "PT"},
+            },
+            extra_para_fields=["spaceAbove", "spaceBelow"],
+        )
+
+    # Flush any unclosed code block or list at EOF
+    _flush_active_list()
+    if in_code_block and code_lines_acc:
+        for code_line in code_lines_acc:
+            _append_paragraph(
+                code_line if code_line else " ",
+                parse_inline=False,
+                named_style="NORMAL_TEXT",
+                whole_text_style={
+                    "font_family": "Roboto Mono",
+                    "font_size_pt": 10.0,
+                    "bg_rgb": (0.945, 0.953, 0.957),
+                },
+            )
+
+    full_clean_text = "".join(clean_chunks)
+    if not full_clean_text:
+        return []
+
+    requests: list[dict[str, Any]] = [
+        {
+            "insertText": {
+                "location": {"index": start_index},
+                "text": full_clean_text,
+            }
+        },
+        *paragraph_requests,
+        *text_style_requests,
+    ]
+
+    # Emit createParagraphBullets in reverse document order so nested \t consumption
+    # never shifts the indices of earlier list blocks or text/paragraph styles.
+    for b_start, b_end, preset in reversed(list_blocks):
+        requests.append(
+            {
+                "createParagraphBullets": {
+                    "range": {"startIndex": b_start, "endIndex": b_end},
+                    "bulletPreset": preset,
+                }
+            }
+        )
+
+    return requests
+
+
 def docs_create_document(
     title: str,
     markdown_or_text_body: str,
     tool_context: Optional[ToolContext] = None,
 ) -> dict[str, Any]:
-    """Creates a new Google Doc in the user's Google Drive and populates it with text—ideal for saving Deep Research reports.
+    """Creates a new Google Doc in the user's Google Drive and renders Markdown into native Google Docs formatting.
+
+    Headings (#..######), bold (**), italic (*), inline code (`), clickable links ([Title](url)),
+    bulleted/numbered lists, blockquotes (>), and tables are automatically converted into native
+    Google Docs styles—ideal for saving Deep Research reports and executive briefs.
 
     Args:
         title: Title of the new Google Doc.
-        markdown_or_text_body: Body content to insert into the document.
+        markdown_or_text_body: Markdown or plain-text content to render into the document.
     """
     docs_service = _get_service("docs", "v1")
     doc = docs_service.documents().create(body={"title": title}).execute()
     doc_id = doc["documentId"]
 
-    if markdown_or_text_body:
-        docs_service.documents().batchUpdate(
-            documentId=doc_id,
-            body={
-                "requests": [
-                    {
-                        "insertText": {
-                            "location": {"index": 1},
-                            "text": markdown_or_text_body,
-                        }
-                    }
-                ]
-            },
-        ).execute()
+    if markdown_or_text_body and markdown_or_text_body.strip():
+        requests = markdown_to_docs_batch_requests(markdown_or_text_body, start_index=1)
+        if requests:
+            docs_service.documents().batchUpdate(
+                documentId=doc_id,
+                body={"requests": requests},
+            ).execute()
 
     return {
         "status": "created",

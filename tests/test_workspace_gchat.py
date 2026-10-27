@@ -19,8 +19,10 @@ from src.integrations.gchat_pubsub import GChatPubSubBridge
 from src.integrations.gchat_webhook import HTTPException, verify_gchat_bearer_token
 from src.integrations.workspace_oauth import WorkspaceOAuthManager
 from src.tools.workspace_tools import (
+    docs_create_document,
     get_workspace_tools,
     gmail_send_email,
+    markdown_to_docs_batch_requests,
 )
 
 
@@ -386,6 +388,88 @@ if pytest is not None:
         _run_workspace_oauth_exchange_assertions(tmp_path)
 
 
+def test_docs_create_document_renders_markdown_properly() -> None:
+    sample_md = """# Executive Research Report
+
+Here is **bold text**, *italic text*, `inline_code`, and a [Google Cloud link](https://cloud.google.com).
+
+## Key Takeaways
+- First **important** bullet
+  - Nested sub-bullet
+- [x] Completed action item
+
+1. First numbered step
+2. Second numbered step
+
+> Crucial executive blockquote note.
+
+| Model | Latency |
+|---|---|
+| gemini-4-argon | 420ms |
+
+```python
+print("Hello ADK")
+```
+"""
+    fake_docs_service = MagicMock()
+    fake_docs_service.documents().create().execute.return_value = {"documentId": "doc_md_123"}
+
+    with patch("src.tools.workspace_tools._get_service", return_value=fake_docs_service):
+        res = docs_create_document(
+            title="Executive Research Report",
+            markdown_or_text_body=sample_md,
+        )
+
+    assert res["status"] == "created"
+    assert res["document_id"] == "doc_md_123"
+
+    batch_call = fake_docs_service.documents().batchUpdate.call_args
+    assert batch_call is not None
+    requests = batch_call.kwargs["body"]["requests"]
+    assert len(requests) > 5
+
+    insert_req = requests[0]["insertText"]
+    inserted_text = insert_req["text"]
+    # Verify raw Markdown syntax tokens were stripped from the inserted document text
+    assert "# Executive" not in inserted_text
+    assert "**bold text**" not in inserted_text
+    assert "*italic text*" not in inserted_text
+    assert "`inline_code`" not in inserted_text
+    assert "[Google Cloud link]" not in inserted_text
+    assert "|---|" not in inserted_text
+    assert "```" not in inserted_text
+
+    # Verify clean text is present
+    assert "Executive Research Report" in inserted_text
+    assert "bold text" in inserted_text
+    assert "Google Cloud link" in inserted_text
+    assert "☑ Completed action item" in inserted_text
+
+    # Verify native Google Docs heading styles, text styles, links, and bullets were emitted
+    named_styles = [
+        r["updateParagraphStyle"]["paragraphStyle"].get("namedStyleType")
+        for r in requests
+        if "updateParagraphStyle" in r
+    ]
+    assert "HEADING_1" in named_styles
+    assert "HEADING_2" in named_styles
+
+    bullet_presets = [
+        r["createParagraphBullets"]["bulletPreset"]
+        for r in requests
+        if "createParagraphBullets" in r
+    ]
+    assert "BULLET_DISC_CIRCLE_SQUARE" in bullet_presets
+    assert "NUMBERED_DECIMAL_ALPHA_ROMAN" in bullet_presets
+
+    link_urls = [
+        r["updateTextStyle"]["textStyle"].get("link", {}).get("url")
+        for r in requests
+        if "updateTextStyle" in r and "link" in r["updateTextStyle"]["textStyle"]
+    ]
+    assert "https://cloud.google.com" in link_urls
+
+
 class TestWorkspaceAndGChat(unittest.IsolatedAsyncioTestCase):
     async def test_gchat_allowlist_blocks_unauthorized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -403,6 +487,7 @@ class TestWorkspaceAndGChat(unittest.IsolatedAsyncioTestCase):
         test_gmail_send_email_enforces_draft_only_safety_gate()
         test_gmail_send_email_sends_when_allow_send_enabled()
         test_get_workspace_tools_returns_all_9_tools()
+        test_docs_create_document_renders_markdown_properly()
 
     def test_workspace_oauth_manager(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
