@@ -130,6 +130,23 @@
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-on-primary-container);
   border-radius: 18px 18px 4px 18px;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
+.chat-msg.user *,
+.chat-turn-user * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.chat-msg.user::selection,
+.chat-msg.user *::selection,
+.chat-turn-user::selection,
+.chat-turn-user *::selection {
+  background-color: var(--md-sys-color-on-primary-container);
+  color: var(--md-sys-color-primary-container);
 }
 
 .chat-msg.assistant,
@@ -142,6 +159,14 @@
   background: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
   border-radius: 18px 18px 18px 4px;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.turn-prose,
+.turn-prose * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 /* 4. Turn Header & Semantic Grounding Badges */

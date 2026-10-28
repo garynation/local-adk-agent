@@ -360,6 +360,73 @@ class TestAdkCore(unittest.IsolatedAsyncioTestCase):
             )
             self.assertTrue((data_dir / "client_secret.json.bak").exists())
 
+    def test_deep_research_interaction_extraction_and_model_mapping(self) -> None:
+        """Verifies Interaction.steps extraction, model alias resolution, user prefix cleaning, and user bubble selection CSS."""
+        from src.agents.deep_research_agent import extract_interaction_output_text
+        from src.agents.root_agent import resolve_adk_model_name
+        from src.core.runner_manager import clean_user_message_text
+
+        # 1. Interactions-only agent names must map to generateContent-compatible models
+        self.assertEqual(
+            resolve_adk_model_name("deep-research-preview-04-2026"),
+            "gemini-4-argon",
+        )
+        self.assertEqual(
+            resolve_adk_model_name("deep-research-max-preview-04-2026"),
+            "gemini-4-argon",
+        )
+        self.assertEqual(
+            resolve_adk_model_name("antigravity-preview-latest"),
+            "gemini-4-argon",
+        )
+
+        # 2. Modern google-genai >= 2.4.0 Interaction.steps extraction
+        class _DummyContent:
+            def __init__(self, c_type: str, text: str = "") -> None:
+                self.type = c_type
+                self.text = text
+
+        class _DummyStep:
+            def __init__(self, s_type: str, content: list[Any]) -> None:
+                self.type = s_type
+                self.content = content
+
+        class _DummyInteraction:
+            output_text = None
+            outputs = None
+            steps = [
+                _DummyStep("model_output", [_DummyContent("thought", "Thinking...")]),
+                _DummyStep(
+                    "model_output",
+                    [
+                        _DummyContent("thought", "Synthesizing..."),
+                        _DummyContent("text", "# Final Deep Research Report\nVerified [1](https://example.com)."),
+                    ],
+                ),
+            ]
+
+        extracted = extract_interaction_output_text(_DummyInteraction())
+        self.assertIn("# Final Deep Research Report", extracted)
+        self.assertNotIn("Thinking...", extracted)
+
+        # 3. Strip [DEEP RESEARCH MODE ENABLED: ...] prefix from user bubbles
+        leaked = (
+            "[DEEP RESEARCH MODE ENABLED: Use `deep_research_workflow` (or "
+            "`run_gemini_deep_research_interaction` if configured) to conduct a "
+            "thorough multi-query investigation and return a fully cited report.] "
+            "this research didnt work, try again"
+        )
+        self.assertEqual(
+            clean_user_message_text(leaked),
+            "this research didnt work, try again",
+        )
+
+        # 4. Verify .chat-msg.user CSS has explicit user-select: text and inverted ::selection contrast
+        css_path = Path(__file__).resolve().parent.parent / "src" / "web" / "css" / "chat-stream-cards.css"
+        css_text = css_path.read_text(encoding="utf-8")
+        self.assertIn(".chat-msg.user::selection", css_text)
+        self.assertIn("user-select: text !important;", css_text)
+
 
 if __name__ == "__main__":
     unittest.main()

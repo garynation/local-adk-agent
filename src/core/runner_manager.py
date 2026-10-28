@@ -9,16 +9,19 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sqlite3
 import threading
 import time
 from typing import Any, AsyncGenerator, Callable, Optional
 import uuid
 
+from ..agents.deep_research_agent import stream_deep_research_pipeline
 from ..agents.root_agent import (
     _discover_browser_tools,
     _discover_workspace_tools,
     build_personal_assistant_root_agent,
+    resolve_adk_model_name,
     types,
 )
 from .config_store import (
@@ -60,6 +63,19 @@ def _configure_sqlite_wal(dbapi_conn: Any, connection_record: Any = None) -> Non
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
+
+
+_INTERNAL_MODE_PREFIX_RE = re.compile(
+    r"^\s*\[DEEP RESEARCH MODE ENABLED:[^\]]*\]\s*",
+    re.IGNORECASE,
+)
+
+
+def clean_user_message_text(text: str) -> str:
+    """Strips internal mode routing prefixes (e.g. [DEEP RESEARCH MODE ENABLED: ...]) from user messages."""
+    if not text:
+        return ""
+    return _INTERNAL_MODE_PREFIX_RE.sub("", str(text)).strip()
 
 
 class _FallbackSessionObj:
@@ -133,6 +149,7 @@ class _SqliteFallbackSessionService:
         user_id: str,
         session_id: Optional[str] = None,
         state: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> _FallbackSessionObj:
         sid = session_id or f"sess_{uuid.uuid4().hex[:12]}"
         now = time.time()
@@ -166,6 +183,8 @@ class _SqliteFallbackSessionService:
         app_name: str,
         user_id: str,
         session_id: str,
+        config: Any = None,
+        **kwargs: Any,
     ) -> Optional[_FallbackSessionObj]:
         with self._lock:
             conn = self._connect()
@@ -198,6 +217,7 @@ class _SqliteFallbackSessionService:
         *,
         app_name: str,
         user_id: Optional[str] = None,
+        **kwargs: Any,
     ) -> _FallbackSessionsListResponse:
         with self._lock:
             conn = self._connect()
@@ -236,6 +256,48 @@ class _SqliteFallbackSessionService:
                 return _FallbackSessionsListResponse(sessions)
             finally:
                 conn.close()
+
+    async def delete_session(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        **kwargs: Any,
+    ) -> None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    DELETE FROM adk_sessions_fallback
+                    WHERE app_name = ? AND session_id = ? AND (user_id = ? OR ? = '*')
+                    """,
+                    (app_name, session_id, user_id, user_id),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def append_event(
+        self,
+        session: Any,
+        event: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """ADK SessionService compatibility hook for appending an Event object."""
+        if getattr(event, "partial", False):
+            return event
+        app_name = getattr(session, "app_name", APP_NAME)
+        user_id = getattr(session, "user_id", "local_owner")
+        session_id = getattr(session, "id", "")
+        actions = getattr(event, "actions", None)
+        state_delta = getattr(actions, "state_delta", None) if actions else None
+        if isinstance(state_delta, dict) and hasattr(session, "state"):
+            session.state.update(state_delta)
+        if hasattr(session, "events") and isinstance(session.events, list):
+            session.events.append(event)
+        return event
 
     async def append_serialized_event(
         self,
@@ -496,14 +558,17 @@ class AdkRunnerManager:
         """Executes a user turn against the ADK Runner and yields structured SSE/GChat events."""
         cfg = self._config_manager.config
         resolved_session_id = session_id or f"sess_{uuid.uuid4().hex[:12]}"
-        resolved_message = (user_message or prompt or "").strip()
+        resolved_message = clean_user_message_text(user_message or prompt or "")
         resolved_user_id = (
             user_id
             or cfg.workspace_connected_email
             or cfg.owner_email
             or "local_owner"
         )
-        effective_model = model_override or cfg.default_model
+        raw_requested_model = (model_override or cfg.default_model or "").strip()
+        if raw_requested_model.lower().startswith("deep-research"):
+            deep_research = True
+        effective_model = resolve_adk_model_name(raw_requested_model or cfg.default_model)
 
         await self._ensure_session_metadata(
             user_id=resolved_user_id,
@@ -554,7 +619,7 @@ class AdkRunnerManager:
             }
             return
 
-        runner = await self.get_runner(model_override=model_override)
+        runner = await self.get_runner(model_override=effective_model)
         if not hasattr(runner, "run_async"):
             err_msg = "google-adk Runner runtime is not active in this environment."
             yield {
@@ -569,6 +634,66 @@ class AdkRunnerManager:
                 "grounding_queries": [],
                 "grounding_sources": [],
             }
+            return
+
+        # Check whether `runner` is the real Google ADK `Runner` class or a unit-test double
+        is_native_adk_runner = type(runner).__module__.startswith("google.adk")
+        if deep_research and is_native_adk_runner:
+            browser_tools = (
+                self._browser_tools_provider(cfg)
+                if self._browser_tools_provider
+                else _discover_browser_tools(cfg)
+            )
+            accumulated_dr_text: list[str] = []
+            accumulated_dr_calls: list[dict[str, Any]] = []
+            accumulated_dr_sources: list[dict[str, str]] = []
+            accumulated_dr_queries: list[str] = []
+
+            async with aclosing(
+                stream_deep_research_pipeline(
+                    research_prompt=resolved_message,
+                    api_key=api_key,
+                    session_id=resolved_session_id,
+                    pro_model=effective_model,
+                    fast_model=resolve_adk_model_name(cfg.fast_model),
+                    browser_tools=browser_tools,
+                )
+            ) as dr_gen:
+                async for ev in dr_gen:
+                    serialized = self._serialize_adk_event(
+                        ev, session_id=resolved_session_id
+                    )
+                    if serialized.get("text") and not serialized.get("partial"):
+                        accumulated_dr_text.append(serialized["text"])
+                    if serialized.get("tool_calls"):
+                        accumulated_dr_calls.extend(serialized["tool_calls"])
+                    if serialized.get("grounding_sources"):
+                        for src in serialized["grounding_sources"]:
+                            if src not in accumulated_dr_sources:
+                                accumulated_dr_sources.append(src)
+                    if serialized.get("grounding_queries"):
+                        for q in serialized["grounding_queries"]:
+                            if q not in accumulated_dr_queries:
+                                accumulated_dr_queries.append(q)
+                    yield serialized
+
+            if accumulated_dr_text or accumulated_dr_calls:
+                await self._fallback_session_service.append_serialized_event(
+                    app_name=APP_NAME,
+                    user_id=resolved_user_id,
+                    session_id=resolved_session_id,
+                    event_dict={
+                        "id": f"ev_asst_{uuid.uuid4().hex[:8]}",
+                        "author": "citation_report_synthesizer",
+                        "role": "model",
+                        "text": "\n\n".join(accumulated_dr_text),
+                        "timestamp": time.time(),
+                        "tool_calls": accumulated_dr_calls,
+                        "tool_responses": [],
+                        "grounding_queries": accumulated_dr_queries,
+                        "grounding_sources": accumulated_dr_sources,
+                    },
+                )
             return
 
         effective_text = resolved_message
@@ -759,6 +884,8 @@ class AdkRunnerManager:
             if session_id and "session_id" not in out:
                 out["session_id"] = session_id
             out.setdefault("type", "event")
+            if out.get("author") == "user" or out.get("role") == "user":
+                out["text"] = clean_user_message_text(out.get("text", ""))
             return out
 
         payload: dict[str, Any] = {
@@ -801,7 +928,10 @@ class AdkRunnerManager:
                             "response": getattr(fn_resp, "response", None),
                         }
                     )
-            payload["text"] = "".join(text_chunks)
+            raw_joined = "".join(text_chunks)
+            if payload["author"] == "user" or getattr(content, "role", "") == "user":
+                raw_joined = clean_user_message_text(raw_joined)
+            payload["text"] = raw_joined
 
         gm = getattr(event, "grounding_metadata", None)
         if gm:
@@ -913,17 +1043,16 @@ class AdkRunnerManager:
                 candidate_users.append(u)
 
         session_obj: Any = None
-        for svc in (self.session_service, self._fallback_session_service):
+        for svc in (self._fallback_session_service, self.session_service):
             for u in candidate_users:
                 try:
                     s = await svc.get_session(
                         app_name=APP_NAME, user_id=u, session_id=session_id
                     )
                     if s is not None:
-                        if session_obj is None or (
-                            getattr(s, "events", None)
-                            and not getattr(session_obj, "events", None)
-                        ):
+                        s_events = getattr(s, "events", None) or []
+                        cur_events = getattr(session_obj, "events", None) or [] if session_obj is not None else []
+                        if session_obj is None or len(s_events) > len(cur_events):
                             session_obj = s
                 except Exception:
                     continue

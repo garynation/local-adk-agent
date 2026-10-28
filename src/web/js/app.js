@@ -508,6 +508,12 @@
   // ---------------------------------------------------------------------------
   // 6. Professional GFM Markdown Renderer & Live SSE Chat Streaming
   // ---------------------------------------------------------------------------
+  function stripInternalPrefixes(str) {
+    return String(str || '')
+      .replace(/^\s*\[DEEP RESEARCH MODE ENABLED:[^\]]*\]\s*/i, '')
+      .trim();
+  }
+
   function escapeHtml(str) {
     return String(str || '')
       .replace(/&/g, '&amp;')
@@ -788,16 +794,50 @@
             escapeHtml(data.title) + ' <span class="header-count">· Synced</span>';
         }
         var events = data.events || data.messages || [];
+        var allSessionSources = [];
         if (Array.isArray(events) && events.length > 0) {
           chatStream.innerHTML = events
             .map(function (ev) {
               var isUser = ev.author === 'user' || ev.role === 'user';
               if (isUser) {
+                var cleanUserText = stripInternalPrefixes(ev.text || '');
                 return (
-                  '<article class="chat-msg user"><div class="chat-turn-header"><strong class="chat-msg-author">You</strong></div><p style="margin:0;">' +
-                  escapeHtml(ev.text || '') +
-                  '</p></article>'
+                  '<article class="chat-msg user">' +
+                  '  <div class="chat-turn-header">' +
+                  '    <strong class="chat-msg-author">You</strong>' +
+                  '    <button type="button" class="chat-action-btn" data-chat-action="copy" aria-label="Copy prompt" style="min-height:24px; padding:2px 8px; font-size:11px; background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 14%, transparent); color:var(--md-sys-color-on-primary-container);">' +
+                  '      <span class="material-symbols-outlined" style="font-size:13px;">content_copy</span><span>Copy</span>' +
+                  '    </button>' +
+                  '  </div>' +
+                  '  <p class="turn-prose" style="margin:0; white-space:pre-wrap;">' +
+                  escapeHtml(cleanUserText) +
+                  '  </p>' +
+                  '</article>'
                 );
+              }
+              if (Array.isArray(ev.grounding_sources)) {
+                ev.grounding_sources.forEach(function (s) {
+                  allSessionSources.push(s);
+                });
+              }
+              var traceHtml = '';
+              if (Array.isArray(ev.tool_calls) && ev.tool_calls.length > 0) {
+                traceHtml =
+                  '<div class="turn-traces">' +
+                  ev.tool_calls
+                    .map(function (tc) {
+                      return (
+                        '<div class="step-trace-box">' +
+                        '<button type="button" class="step-trace-header" aria-expanded="false" data-trace-toggle="true"><span class="row-inline"><span class="material-symbols-outlined">build</span><span>Tool call: <strong>' +
+                        escapeHtml(tc.name || 'tool') +
+                        '</strong></span></span><span class="row-inline"><span class="status-dot-inline"><span class="status-dot green"></span>Executed</span><span class="material-symbols-outlined">expand_more</span></span></button>' +
+                        '<pre class="step-trace-body" hidden>' +
+                        escapeHtml(JSON.stringify(tc.args || {}, null, 2)) +
+                        '</pre></div>'
+                      );
+                    })
+                    .join('') +
+                  '</div>';
               }
               return (
                 '<article class="chat-msg assistant">' +
@@ -810,6 +850,7 @@
                 '      <span class="chat-turn-badge">Completed</span>' +
                 '    </div>' +
                 '  </div>' +
+                traceHtml +
                 '  <div class="turn-prose md-prose">' +
                 renderMarkdown(ev.text || '') +
                 '  </div>' +
@@ -824,6 +865,9 @@
               );
             })
             .join('');
+          if (allSessionSources.length > 0) {
+            updateGroundingSourcesPane(allSessionSources);
+          }
           scrollChatToBottom();
         }
       })
@@ -859,14 +903,16 @@
       var userTurn = document.createElement('article');
       userTurn.className = 'chat-msg user';
       userTurn.innerHTML =
-        '<div class="chat-turn-header"><strong class="chat-msg-author">You (Web UI)</strong><span class="chat-msg-time">Just now</span></div><p style="margin:0; white-space:pre-wrap;">' +
+        '<div class="chat-turn-header"><strong class="chat-msg-author">You (Web UI)</strong><div class="row-inline" style="gap:8px;"><span class="chat-msg-time">Just now</span><button type="button" class="chat-action-btn" data-chat-action="copy" aria-label="Copy prompt" style="min-height:24px; padding:2px 8px; font-size:11px; background:color-mix(in srgb, var(--md-sys-color-on-primary-container) 14%, transparent); color:var(--md-sys-color-on-primary-container);"><span class="material-symbols-outlined" style="font-size:13px;">content_copy</span><span>Copy</span></button></div></div><p class="turn-prose" style="margin:0; white-space:pre-wrap;">' +
         escapeHtml(promptText) +
         '</p>';
       chatStream.appendChild(userTurn);
 
       var modelSelect = document.getElementById('model-select');
       var selectedModel = modelSelect ? modelSelect.value : 'gemini-4-argon';
-      var isDeepResearch = currentMode === 'deep_research';
+      var isDeepResearch =
+        currentMode === 'deep_research' ||
+        String(selectedModel).toLowerCase().indexOf('deep-research') === 0;
 
       var assistantTurn = document.createElement('article');
       assistantTurn.className = 'chat-msg assistant';

@@ -85,13 +85,22 @@ _MODEL_ALIAS_MAP = {
     "gemini-4-flash": "gemini-4-argon",
     "gemini-3.0-pro": "gemini-3.1-pro-preview",
     "gemini-3.0-flash": "gemini-3.8-flash",
+    "deep-research-preview-04-2026": "gemini-4-argon",
+    "deep-research-max-preview-04-2026": "gemini-4-argon",
+    "antigravity-preview-latest": "gemini-4-argon",
+    "antigravity-preview-09-2026": "gemini-4-argon",
 }
+
+
+def resolve_adk_model_name(model_name: str) -> str:
+    """Normalizes model names and maps Interactions-API-only agent IDs to generateContent-compatible models."""
+    cleaned_model = (model_name or "gemini-4-argon").strip().removeprefix("models/")
+    return _MODEL_ALIAS_MAP.get(cleaned_model, cleaned_model)
 
 
 def _build_gemini_model(model_name: str, api_key: Optional[str]) -> Gemini:
     """Creates an ADK Gemini model explicitly bound to the AI Studio API key (vertexai=False)."""
-    cleaned_model = (model_name or "gemini-4-argon").strip().removeprefix("models/")
-    resolved_model = _MODEL_ALIAS_MAP.get(cleaned_model, cleaned_model)
+    resolved_model = resolve_adk_model_name(model_name)
     client_kwargs: dict[str, Any] = {"vertexai": False}
     if api_key:
         client_kwargs["api_key"] = api_key
